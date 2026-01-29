@@ -1,0 +1,291 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+.venv/
+venv/
+ENV/
+.env/
+
+# Jupyter notebooks
+.ipynb_checkpoints/
+
+# Data files
+data/
+dataset/
+*.tdms
+*.mp4
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.npy
+
+# Output directories
+output/
+output_images/
+example_images/
+
+# System files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Build files
+dist/
+build/
+tdms_explorer.egg-info/
+
+# Logs and databases
+*.log
+*.sqlite
+*.db
+
+# Environment variables
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Coverage
+.coverage
+*.cover
+*.py,cover
+
+# MacOS
+*.app
+*.dmg
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Linux
+*.bak
+*.cache
+
+# Test files
+test_*.py
+*_test.py
+
+# Documentation build
+_docs/
+build/
+
+# Python package artifacts
+*.egg-info/
+*.dist-info/
+*.egg
+MANIFEST
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Jupyter Notebook
+.jupyter/
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# Poetry
+poetry.lock
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# MacOS specific
+.fseventsd
+.Spotlight-V100
+.Trashes
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows specific
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# Linux specific
+*~
+
+# General
+*.bak
+*.tmp
+*.swp
+*.swo
+
+# Large data files
+*.h5
+*.hdf5
+*.mat
+*.nc
+*.fits
+
+# Compiled files
+*.so
+*.dll
+*.dylib
+*.exe
+*.out
+*.obj
+*.o
+*.a
+*.lib
+*.dll
+*.pyd
+
+# Configuration files that may contain sensitive information
+*.ini
+*.cfg
+*.conf
+*.config
+*.yaml
+*.yml
+*.json
+*.toml
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+*.pdb
+
+# Log files
+*.log
+*.log.*
+log/
+logs/
+
+# Cache files
+*.cache
+.cache/
+cache/
+
+# Temporary files
+*.tmp
+tmp/
+temp/
+
+# Backup files
+*.bak
+*.backup
+backup/
+backups/
+
+# Downloads
+downloads/
+download/
+
+# Vendor/dependencies
+vendor/
+dependencies/
+lib/
+
+# Node.js
+node_modules/
+
+# Ruby
+.bundle/
+
+# Java
+*.class
+
+# C/C++
+*.o
+*.out
+*.exe
+
+# Go
+go.mod
+go.sum
+
+# Rust
+target/
+Cargo.lock
+
+# Haskell
+dist/
+dist-newstyle/
+
+# Scala
+target/
+project/target/
+project/project/
+
+# Clojure
+target/
+
+# Elixir
+_build/
+deps/
+
+# Erlang
+_build/
+
+# Perl
+blib/
+Build
+
+# PHP
+vendor/
+composer.lock
+
+# Ruby
+Gemfile.lock
+
+# Swift
+Packages/
+Carthage/
+Pods/
+
+# TypeScript
+typings/
+
+# Web
+bower_components/
+
+# Other
+.DS_Store
+.Trashes
+.fseventsd
+.Spotlight-V100
+.Bridge
+.VolumeIcon.icns
+.VolumeIcon.icns
+
+# End of .gitignore
