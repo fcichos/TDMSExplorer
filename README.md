@@ -86,6 +86,12 @@ python -m tdms_explorer info "file.tdms"
 # Display first image from a file
 python -m tdms_explorer show "file.tdms" --image 0
 
+# Save image to file (works in JupyterLab!)
+python -m tdms_explorer show "file.tdms" --save output.png
+
+# Show statistics without display (for headless environments)
+python -m tdms_explorer show "file.tdms" --no-show
+
 # Export all images to directory
 python -m tdms_explorer export "file.tdms" output_dir
 
@@ -421,6 +427,62 @@ If you encounter any issues, please:
 3. Provide detailed error messages
 4. Include sample files if possible
 5. Open an issue on GitHub
+
+## 💻 JupyterLab Compatibility
+
+The CLI is designed to work well in JupyterLab terminals where GUI display may not be available:
+
+### JupyterLab-Specific Features
+
+- **Automatic detection of headless environments** - The CLI detects when GUI display isn't available
+- **Rich statistics display** - Shows detailed image statistics when display isn't possible
+- **Direct file saving** - Use `--save` option to export images directly
+- **Helpful error messages** - Clear guidance on how to get results in headless environments
+
+### Example: Using CLI in JupyterLab
+
+```bash
+# This will show statistics instead of trying to display
+python -m tdms_explorer show "file.tdms" --image 0
+
+# Save image directly to file (recommended for JupyterLab)
+python -m tdms_explorer show "file.tdms" --image 0 --save output.png
+
+# Get detailed statistics without display
+python -m tdms_explorer show "file.tdms" --image 0 --no-show
+```
+
+### Output in JupyterLab
+
+When you run display commands in JupyterLab, you'll see helpful output like:
+
+```
+Image 0 from file.tdms
+Shape: 256x256
+Data range: 442.00 to 750.00
+Data type: int32
+
+📊 Image Statistics:
+  Min: 442.0000
+  Max: 750.0000
+  Mean: 503.2990
+  Std: 17.4703
+  Median: 502.0000
+
+💾 Tip: Use '--save image.png' to save this image to a file
+⚠️  Display not available in this environment
+   Try running in a terminal with GUI support or use '--save' to export the image
+```
+
+### Recommended Workflow for JupyterLab
+
+1. **Explore files**: Use `list` and `info` commands to find and analyze TDMS files
+2. **Save images**: Use `--save` option to export specific images
+3. **Export series**: Use `export` command for multiple images
+4. **Analyze data**: Use `stats` and `raw` commands for numerical analysis
+5. **View results**: Use JupyterLab's file browser to view saved images
+
+This makes the TDMS Explorer fully functional in JupyterLab environments!
 
 ## 📚 Related Resources
 

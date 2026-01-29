@@ -45,6 +45,9 @@ Examples:
   # Display first image from a file
   python -m tdms_explorer.cli show "file.tdms" --image 0
   
+  # Save image to file (works in JupyterLab!)
+  python -m tdms_explorer.cli show "file.tdms" --save output.png
+  
   # Export all images to directory
   python -m tdms_explorer.cli export "file.tdms" output_dir
   
@@ -74,7 +77,8 @@ Examples:
         show_parser.add_argument('file', help='TDMS file to display')
         show_parser.add_argument('--image', '-i', type=int, default=0, help='Image number to display (default: 0)')
         show_parser.add_argument('--cmap', default='gray', help='Colormap to use (default: gray)')
-        show_parser.add_argument('--no-show', action='store_true', help='Don\'t display image (just test)')
+        show_parser.add_argument('--no-show', action='store_true', help='Don\'t display image (show statistics instead)')
+        show_parser.add_argument('--save', help='Save image to file instead of displaying')
         
         # Animate command
         animate_parser = subparsers.add_parser('animate', help='Create animation from TDMS file')
@@ -217,6 +221,7 @@ Examples:
         image_num = self.args.image
         cmap = self.args.cmap
         no_show = self.args.no_show
+        save_file = self.args.save
         
         try:
             explorer = TDMSFileExplorer(filename)
@@ -234,14 +239,65 @@ Examples:
                 print(f"Image number {image_num} is out of range. Max: {images.shape[0]-1}")
                 return
             
-            print(f"Displaying image {image_num} from {filename}")
-            print(f"Image shape: {images.shape[1]}x{images.shape[2]}")
+            print(f"Image {image_num} from {filename}")
+            print(f"Shape: {images.shape[1]}x{images.shape[2]}")
             print(f"Data range: {images[image_num].min():.2f} to {images[image_num].max():.2f}")
+            print(f"Data type: {images.dtype}")
             
-            if not no_show:
-                explorer.display_image(image_num, cmap=cmap)
+            # Handle save option first
+            if save_file:
+                print(f"\n💾 Saving image to: {save_file}")
+                explorer.write_image(image_num, save_file, cmap=cmap, overwrite=True)
+                print(f"✅ Image saved successfully!")
+                
+                # Also show statistics when saving
+                print(f"\n📊 Image Statistics:")
+                img_data = images[image_num, :, :]
+                print(f"  Min: {img_data.min():.4f}")
+                print(f"  Max: {img_data.max():.4f}")
+                print(f"  Mean: {img_data.mean():.4f}")
+                print(f"  Std: {img_data.std():.4f}")
+                print(f"  Median: {np.median(img_data):.4f}")
+                return
+            
+            # Check if we're in a headless environment
+            import matplotlib
+            backend = matplotlib.get_backend()
+            is_headless = backend in ['Agg', 'pdf', 'ps', 'svg'] or 'inline' not in backend
+            
+            if no_show or is_headless:
+                print("\n📊 Image Statistics:")
+                img_data = images[image_num, :, :]
+                print(f"  Min: {img_data.min():.4f}")
+                print(f"  Max: {img_data.max():.4f}")
+                print(f"  Mean: {img_data.mean():.4f}")
+                print(f"  Std: {img_data.std():.4f}")
+                print(f"  Median: {np.median(img_data):.4f}")
+                
+                # Offer to save the image
+                print(f"\n💾 Tip: Use '--save image.png' to save this image to a file")
+                print(f"🎨 Tip: Use '--no-show' to skip display in GUI environments")
+                
+                if is_headless:
+                    print(f"\n⚠️  Display not available in this environment (backend: {backend})")
+                    print(f"   Try running in a terminal with GUI support or use '--save' to export the image")
+                else:
+                    print("Image display skipped (--no-show flag)")
             else:
-                print("Image display skipped (--no-show flag)")
+                try:
+                    print("\n🖼️  Displaying image...")
+                    explorer.display_image(image_num, cmap=cmap)
+                except Exception as display_error:
+                    print(f"\n❌ Could not display image: {display_error}")
+                    print("   Falling back to statistics display...")
+                    img_data = images[image_num, :, :]
+                    print(f"\n📊 Image Statistics:")
+                    print(f"  Min: {img_data.min():.4f}")
+                    print(f"  Max: {img_data.max():.4f}")
+                    print(f"  Mean: {img_data.mean():.4f}")
+                    print(f"  Std: {img_data.std():.4f}")
+                    print(f"  Median: {np.median(img_data):.4f}")
+                    print(f"\n💾 Use '--save image.png' to save this image to a file")
                 
         except Exception as e:
             print(f"Error displaying image: {e}")
