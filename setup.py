@@ -46,6 +46,9 @@ setup(
         "numpy>=1.18.0",
         "matplotlib>=3.2.0",
         "pillow>=7.0.0",
+        "scikit-image>=0.18.0",
+        "opencv-python>=4.5.0",
+        "scipy>=1.5.0",
     ],
     extras_require={
         "dev": [

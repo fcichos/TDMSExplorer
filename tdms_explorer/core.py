@@ -19,6 +19,12 @@ except ImportError:
     print("pip install nptdms")
     raise
 
+try:
+    from tdms_explorer.image_analysis import ImageAnalyzer
+except ImportError:
+    print("Warning: Image analysis module not available. Some features will be disabled.")
+    ImageAnalyzer = None
+
 
 class TDMSFileExplorer:
     """
@@ -374,6 +380,225 @@ class TDMSFileExplorer:
         except Exception as e:
             print(f"Error reading channel data: {e}")
             return None
+    
+    def create_image_analyzer(self, image_num: int = 0) -> Optional['ImageAnalyzer']:
+        """
+        Create an ImageAnalyzer instance for a specific image.
+        
+        Args:
+            image_num: Image number to analyze
+            
+        Returns:
+            ImageAnalyzer instance or None if image analysis is not available
+        """
+        if ImageAnalyzer is None:
+            print("Image analysis features are not available.")
+            return None
+            
+        image_data = self.get_image_data(image_num)
+        if image_data is None:
+            return None
+            
+        return ImageAnalyzer(image_data)
+    
+    def analyze_image(self, image_num: int = 0) -> Optional[Dict]:
+        """
+        Perform comprehensive analysis on an image.
+        
+        Args:
+            image_num: Image number to analyze
+            
+        Returns:
+            Dictionary with image analysis results, or None if analysis failed
+        """
+        analyzer = self.create_image_analyzer(image_num)
+        if analyzer is None:
+            return None
+            
+        return analyzer.analyze_image()
+    
+    def apply_image_filter(self, image_num: int = 0, filter_type: str = 'gaussian', **kwargs) -> Optional[np.ndarray]:
+        """
+        Apply a filter to an image.
+        
+        Args:
+            image_num: Image number to process
+            filter_type: Type of filter to apply
+            **kwargs: Filter-specific parameters
+            
+        Returns:
+            Processed image data or None if filtering failed
+        """
+        analyzer = self.create_image_analyzer(image_num)
+        if analyzer is None:
+            return None
+            
+        return analyzer.apply_filter(filter_type, **kwargs)
+    
+    def detect_edges(self, image_num: int = 0, method: str = 'canny', **kwargs) -> Optional[np.ndarray]:
+        """
+        Detect edges in an image.
+        
+        Args:
+            image_num: Image number to process
+            method: Edge detection method
+            **kwargs: Method-specific parameters
+            
+        Returns:
+            Edge-detected image or None if detection failed
+        """
+        analyzer = self.create_image_analyzer(image_num)
+        if analyzer is None:
+            return None
+            
+        return analyzer.detect_edges(method, **kwargs)
+    
+    def threshold_image(self, image_num: int = 0, method: str = 'otsu', **kwargs) -> Optional[np.ndarray]:
+        """
+        Apply thresholding to an image.
+        
+        Args:
+            image_num: Image number to process
+            method: Thresholding method
+            **kwargs: Method-specific parameters
+            
+        Returns:
+            Thresholded image or None if thresholding failed
+        """
+        analyzer = self.create_image_analyzer(image_num)
+        if analyzer is None:
+            return None
+            
+        return analyzer.threshold_image(method, **kwargs)
+    
+    def set_roi(self, image_num: int = 0, x: int = 0, y: int = 0, width: int = 100, height: int = 100) -> Optional[Dict]:
+        """
+        Set a region of interest on an image.
+        
+        Args:
+            image_num: Image number
+            x, y: Top-left corner coordinates
+            width, height: ROI dimensions
+            
+        Returns:
+            ROI coordinates dictionary or None if ROI setting failed
+        """
+        analyzer = self.create_image_analyzer(image_num)
+        if analyzer is None:
+            return None
+            
+        roi_mask = analyzer.set_roi_rectangle(x, y, width, height)
+        return analyzer.roi_coords
+    
+    def get_roi_analysis(self, image_num: int = 0) -> Optional[Dict]:
+        """
+        Get analysis results for the current ROI.
+        
+        Args:
+            image_num: Image number
+            
+        Returns:
+            Dictionary with ROI analysis results or None if no ROI is set
+        """
+        analyzer = self.create_image_analyzer(image_num)
+        if analyzer is None:
+            return None
+            
+        if analyzer.roi_mask is None:
+            print("No ROI is currently set.")
+            return None
+            
+        return analyzer.analyze_image()
+    
+    def interactive_roi_selection(self, image_num: int = 0, cmap: str = 'gray') -> Optional[Dict]:
+        """
+        Interactive ROI selection for an image.
+        
+        Args:
+            image_num: Image number
+            cmap: Matplotlib colormap
+            
+        Returns:
+            ROI coordinates dictionary or None if selection failed
+        """
+        analyzer = self.create_image_analyzer(image_num)
+        if analyzer is None:
+            return None
+            
+        return analyzer.interactive_roi_selection(cmap)
+    
+    def compare_images(self, image_num1: int = 0, image_num2: int = 1, method: str = 'difference') -> Optional[np.ndarray]:
+        """
+        Compare two images from the TDMS file.
+        
+        Args:
+            image_num1: First image number
+            image_num2: Second image number
+            method: Comparison method
+            
+        Returns:
+            Comparison result as numpy array or None if comparison failed
+        """
+        analyzer1 = self.create_image_analyzer(image_num1)
+        analyzer2 = self.create_image_analyzer(image_num2)
+        
+        if analyzer1 is None or analyzer2 is None:
+            return None
+            
+        return analyzer1.compare_images(analyzer2.current_image, method)
+    
+    def get_image_histogram(self, image_num: int = 0, bins: int = 256) -> Optional[Dict]:
+        """
+        Get histogram data for an image.
+        
+        Args:
+            image_num: Image number
+            bins: Number of histogram bins
+            
+        Returns:
+            Dictionary with histogram data or None if histogram creation failed
+        """
+        analyzer = self.create_image_analyzer(image_num)
+        if analyzer is None:
+            return None
+            
+        return analyzer.create_histogram(bins)
+    
+    def detect_features(self, image_num: int = 0, method: str = 'blob', **kwargs) -> Optional[Dict]:
+        """
+        Detect features in an image.
+        
+        Args:
+            image_num: Image number
+            method: Feature detection method
+            **kwargs: Method-specific parameters
+            
+        Returns:
+            Dictionary with detected features or None if detection failed
+        """
+        analyzer = self.create_image_analyzer(image_num)
+        if analyzer is None:
+            return None
+            
+        return analyzer.detect_features(method, **kwargs)
+    
+    def get_image_profile(self, image_num: int = 0, direction: str = 'horizontal', position: Optional[int] = None) -> Optional[Dict]:
+        """
+        Get intensity profile from an image.
+        
+        Args:
+            image_num: Image number
+            direction: Profile direction
+            position: Position for line profile
+            
+        Returns:
+            Dictionary with profile data or None if profile extraction failed
+        """
+        analyzer = self.create_image_analyzer(image_num)
+        if analyzer is None:
+            return None
+            
+        return analyzer.get_image_profile(direction, position)
 
 
 def list_tdms_files(directory: str = ".") -> List[str]:

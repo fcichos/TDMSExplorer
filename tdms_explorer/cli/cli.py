@@ -56,6 +56,39 @@ Examples:
   
   # Get raw data info
   python -m tdms_explorer.cli raw "file.tdms" --group "Image" --channel "Image"
+  
+  # Image Analysis Examples:
+  
+  # Analyze image statistics
+  python -m tdms_explorer.cli analyze "file.tdms" --image 0
+  
+  # Apply Gaussian filter
+  python -m tdms_explorer.cli filter "file.tdms" --image 0 --type gaussian --sigma 1.5
+  
+  # Detect edges using Canny method
+  python -m tdms_explorer.cli edges "file.tdms" --image 0 --method canny
+  
+  # Apply Otsu thresholding
+  python -m tdms_explorer.cli threshold "file.tdms" --image 0 --method otsu
+  
+  # Set and analyze ROI
+  python -m tdms_explorer.cli roi "file.tdms" --image 0 --set --x 50 --y 50 --width 200 --height 200
+  python -m tdms_explorer.cli roi "file.tdms" --image 0 --analyze
+  
+  # Interactive ROI selection
+  python -m tdms_explorer.cli roi "file.tdms" --image 0 --interactive
+  
+  # Compare two images
+  python -m tdms_explorer.cli compare "file.tdms" --image1 0 --image2 1
+  
+  # Show image histogram
+  python -m tdms_explorer.cli histogram "file.tdms" --image 0
+  
+  # Detect features (blobs, corners, edges)
+  python -m tdms_explorer.cli features "file.tdms" --image 0 --method blob
+  
+  # Get intensity profile
+  python -m tdms_explorer.cli profile "file.tdms" --image 0 --direction horizontal
             ''')
         )
         
@@ -116,6 +149,91 @@ Examples:
         stats_parser.add_argument('--images', action='store_true', help='Show image statistics')
         stats_parser.add_argument('--channels', action='store_true', help='Show channel statistics')
         
+        # Analyze command
+        analyze_parser = subparsers.add_parser('analyze', help='Analyze images from TDMS file')
+        analyze_parser.add_argument('file', help='TDMS file to analyze')
+        analyze_parser.add_argument('--image', '-i', type=int, default=0, help='Image number to analyze (default: 0)')
+        analyze_parser.add_argument('--roi', action='store_true', help='Analyze ROI instead of full image')
+        analyze_parser.add_argument('--json', action='store_true', help='Output in JSON format')
+        
+        # Filter command
+        filter_parser = subparsers.add_parser('filter', help='Apply filters to images')
+        filter_parser.add_argument('file', help='TDMS file to process')
+        filter_parser.add_argument('--image', '-i', type=int, default=0, help='Image number to filter (default: 0)')
+        filter_parser.add_argument('--type', '-t', choices=['gaussian', 'median', 'bilateral', 'sobel', 'prewitt', 'laplace'], 
+                                  default='gaussian', help='Filter type (default: gaussian)')
+        filter_parser.add_argument('--sigma', type=float, default=1.0, help='Sigma for Gaussian filter (default: 1.0)')
+        filter_parser.add_argument('--size', type=int, default=3, help='Kernel size for median filter (default: 3)')
+        filter_parser.add_argument('--save', help='Save filtered image to file')
+        filter_parser.add_argument('--show', action='store_true', help='Show filtered image')
+        
+        # Edge command
+        edge_parser = subparsers.add_parser('edges', help='Detect edges in images')
+        edge_parser.add_argument('file', help='TDMS file to process')
+        edge_parser.add_argument('--image', '-i', type=int, default=0, help='Image number to process (default: 0)')
+        edge_parser.add_argument('--method', '-m', choices=['canny', 'sobel', 'prewitt', 'laplace'], 
+                                default='canny', help='Edge detection method (default: canny)')
+        edge_parser.add_argument('--save', help='Save edge-detected image to file')
+        edge_parser.add_argument('--show', action='store_true', help='Show edge-detected image')
+        
+        # Threshold command
+        threshold_parser = subparsers.add_parser('threshold', help='Apply thresholding to images')
+        threshold_parser.add_argument('file', help='TDMS file to process')
+        threshold_parser.add_argument('--image', '-i', type=int, default=0, help='Image number to process (default: 0)')
+        threshold_parser.add_argument('--method', '-m', choices=['otsu', 'adaptive', 'manual'], 
+                                     default='otsu', help='Thresholding method (default: otsu)')
+        threshold_parser.add_argument('--threshold', type=float, help='Manual threshold value')
+        threshold_parser.add_argument('--save', help='Save thresholded image to file')
+        threshold_parser.add_argument('--show', action='store_true', help='Show thresholded image')
+        
+        # ROI command
+        roi_parser = subparsers.add_parser('roi', help='Region of Interest operations')
+        roi_parser.add_argument('file', help='TDMS file to process')
+        roi_parser.add_argument('--image', '-i', type=int, default=0, help='Image number (default: 0)')
+        roi_parser.add_argument('--set', action='store_true', help='Set ROI coordinates')
+        roi_parser.add_argument('--x', type=int, default=0, help='ROI x coordinate (default: 0)')
+        roi_parser.add_argument('--y', type=int, default=0, help='ROI y coordinate (default: 0)')
+        roi_parser.add_argument('--width', type=int, default=100, help='ROI width (default: 100)')
+        roi_parser.add_argument('--height', type=int, default=100, help='ROI height (default: 100)')
+        roi_parser.add_argument('--analyze', action='store_true', help='Analyze current ROI')
+        roi_parser.add_argument('--interactive', action='store_true', help='Interactive ROI selection')
+        roi_parser.add_argument('--clear', action='store_true', help='Clear current ROI')
+        
+        # Compare command
+        compare_parser = subparsers.add_parser('compare', help='Compare two images')
+        compare_parser.add_argument('file', help='TDMS file to process')
+        compare_parser.add_argument('--image1', '-i1', type=int, default=0, help='First image number (default: 0)')
+        compare_parser.add_argument('--image2', '-i2', type=int, default=1, help='Second image number (default: 1)')
+        compare_parser.add_argument('--method', '-m', choices=['difference', 'absolute', 'relative'], 
+                                    default='difference', help='Comparison method (default: difference)')
+        compare_parser.add_argument('--save', help='Save comparison result to file')
+        compare_parser.add_argument('--show', action='store_true', help='Show comparison result')
+        
+        # Histogram command
+        histogram_parser = subparsers.add_parser('histogram', help='Show image histogram')
+        histogram_parser.add_argument('file', help='TDMS file to process')
+        histogram_parser.add_argument('--image', '-i', type=int, default=0, help='Image number (default: 0)')
+        histogram_parser.add_argument('--bins', type=int, default=256, help='Number of histogram bins (default: 256)')
+        histogram_parser.add_argument('--log', action='store_true', help='Use logarithmic scale')
+        histogram_parser.add_argument('--save', help='Save histogram data to JSON file')
+        
+        # Features command
+        features_parser = subparsers.add_parser('features', help='Detect features in images')
+        features_parser.add_argument('file', help='TDMS file to process')
+        features_parser.add_argument('--image', '-i', type=int, default=0, help='Image number (default: 0)')
+        features_parser.add_argument('--method', '-m', choices=['blob', 'corner', 'edge'], 
+                                     default='blob', help='Feature detection method (default: blob)')
+        features_parser.add_argument('--json', action='store_true', help='Output in JSON format')
+        
+        # Profile command
+        profile_parser = subparsers.add_parser('profile', help='Get image intensity profile')
+        profile_parser.add_argument('file', help='TDMS file to process')
+        profile_parser.add_argument('--image', '-i', type=int, default=0, help='Image number (default: 0)')
+        profile_parser.add_argument('--direction', '-d', choices=['horizontal', 'vertical', 'diagonal'], 
+                                    default='horizontal', help='Profile direction (default: horizontal)')
+        profile_parser.add_argument('--position', '-p', type=int, help='Position for line profile')
+        profile_parser.add_argument('--save', help='Save profile data to JSON file')
+        
         return parser
     
     def parse_args(self, args=None):
@@ -142,6 +260,24 @@ Examples:
                 self._command_raw()
             elif self.args.command == 'stats':
                 self._command_stats()
+            elif self.args.command == 'analyze':
+                self._command_analyze()
+            elif self.args.command == 'filter':
+                self._command_filter()
+            elif self.args.command == 'edges':
+                self._command_edges()
+            elif self.args.command == 'threshold':
+                self._command_threshold()
+            elif self.args.command == 'roi':
+                self._command_roi()
+            elif self.args.command == 'compare':
+                self._command_compare()
+            elif self.args.command == 'histogram':
+                self._command_histogram()
+            elif self.args.command == 'features':
+                self._command_features()
+            elif self.args.command == 'profile':
+                self._command_profile()
         except Exception as e:
             print(f"Error: {e}", file=sys.stderr)
             if hasattr(e, '__traceback__'):
@@ -531,6 +667,492 @@ Examples:
             
         except Exception as e:
             print(f"Error getting statistics: {e}")
+    
+    def _command_analyze(self):
+        """Analyze image command."""
+        filename = self.args.file
+        image_num = self.args.image
+        analyze_roi = self.args.roi
+        json_output = self.args.json
+        
+        try:
+            explorer = TDMSFileExplorer(filename)
+            
+            if not explorer.has_image_data():
+                print("No image data found in file.")
+                return
+                
+            if analyze_roi:
+                # Analyze ROI
+                roi_coords = explorer.set_roi(image_num, 50, 50, 200, 200)
+                if roi_coords:
+                    print(f"🎯 ROI set at: {roi_coords}")
+                    analysis = explorer.get_roi_analysis(image_num)
+                else:
+                    print("Failed to set ROI")
+                    return
+            else:
+                # Analyze full image
+                analysis = explorer.analyze_image(image_num)
+                
+            if analysis is None:
+                print("Analysis failed.")
+                return
+                
+            if json_output:
+                import json
+                print(json.dumps(analysis, indent=2))
+            else:
+                print(f"📊 Analysis Results for Image {image_num}:")
+                print("=" * 50)
+                print(f"Basic Statistics:")
+                print(f"  Min: {analysis['min']:.4f}")
+                print(f"  Max: {analysis['max']:.4f}")
+                print(f"  Mean: {analysis['mean']:.4f}")
+                print(f"  Std: {analysis['std']:.4f}")
+                print(f"  Median: {analysis['median']:.4f}")
+                
+                if 'entropy' in analysis:
+                    print(f"  Entropy: {analysis['entropy']:.4f}")
+                
+                if 'edge_density' in analysis and analysis['edge_density'] is not None:
+                    print(f"  Edge Density: {analysis['edge_density']:.4f}")
+                
+                if 'roi' in analysis:
+                    print(f"\nROI Statistics:")
+                    roi_stats = analysis['roi']
+                    print(f"  Area: {roi_stats['area']} pixels")
+                    print(f"  Min: {roi_stats['min']:.4f}")
+                    print(f"  Max: {roi_stats['max']:.4f}")
+                    print(f"  Mean: {roi_stats['mean']:.4f}")
+                    print(f"  Std: {roi_stats['std']:.4f}")
+                    print(f"  Median: {roi_stats['median']:.4f}")
+        
+        except Exception as e:
+            print(f"Error analyzing image: {e}")
+    
+    def _command_filter(self):
+        """Filter image command."""
+        filename = self.args.file
+        image_num = self.args.image
+        filter_type = self.args.type
+        sigma = self.args.sigma
+        size = self.args.size
+        save_file = self.args.save
+        show_image = self.args.show
+        
+        try:
+            explorer = TDMSFileExplorer(filename)
+            
+            if not explorer.has_image_data():
+                print("No image data found in file.")
+                return
+                
+            print(f"🔧 Applying {filter_type} filter to image {image_num}...")
+            
+            # Apply filter with appropriate parameters
+            if filter_type == 'gaussian':
+                filtered = explorer.apply_image_filter(image_num, filter_type, sigma=sigma)
+            elif filter_type == 'median':
+                filtered = explorer.apply_image_filter(image_num, filter_type, size=size)
+            else:
+                filtered = explorer.apply_image_filter(image_num, filter_type)
+                
+            if filtered is None:
+                print("Filter application failed.")
+                return
+                
+            print(f"✅ Filter applied successfully")
+            
+            # Save if requested
+            if save_file:
+                print(f"💾 Saving filtered image to: {save_file}")
+                plt.imsave(save_file, filtered, cmap='gray')
+                print(f"✅ Image saved successfully")
+                
+            # Show if requested
+            if show_image:
+                print("🖼️  Displaying filtered image...")
+                plt.figure(figsize=(10, 8))
+                plt.imshow(filtered, cmap='gray')
+                plt.title(f"Filtered Image ({filter_type}) - Image {image_num}")
+                plt.colorbar()
+                plt.show()
+                
+        except Exception as e:
+            print(f"Error applying filter: {e}")
+    
+    def _command_edges(self):
+        """Edge detection command."""
+        filename = self.args.file
+        image_num = self.args.image
+        method = self.args.method
+        save_file = self.args.save
+        show_image = self.args.show
+        
+        try:
+            explorer = TDMSFileExplorer(filename)
+            
+            if not explorer.has_image_data():
+                print("No image data found in file.")
+                return
+                
+            print(f"🔍 Detecting edges in image {image_num} using {method} method...")
+            
+            edges = explorer.detect_edges(image_num, method)
+            
+            if edges is None:
+                print("Edge detection failed.")
+                return
+                
+            print(f"✅ Edge detection completed")
+            
+            # Save if requested
+            if save_file:
+                print(f"💾 Saving edge-detected image to: {save_file}")
+                plt.imsave(save_file, edges, cmap='gray')
+                print(f"✅ Image saved successfully")
+                
+            # Show if requested
+            if show_image:
+                print("🖼️  Displaying edge-detected image...")
+                plt.figure(figsize=(10, 8))
+                plt.imshow(edges, cmap='gray')
+                plt.title(f"Edge Detection ({method}) - Image {image_num}")
+                plt.colorbar()
+                plt.show()
+                
+        except Exception as e:
+            print(f"Error detecting edges: {e}")
+    
+    def _command_threshold(self):
+        """Threshold command."""
+        filename = self.args.file
+        image_num = self.args.image
+        method = self.args.method
+        threshold = self.args.threshold
+        save_file = self.args.save
+        show_image = self.args.show
+        
+        try:
+            explorer = TDMSFileExplorer(filename)
+            
+            if not explorer.has_image_data():
+                print("No image data found in file.")
+                return
+                
+            print(f"📉 Applying {method} thresholding to image {image_num}...")
+            
+            # Apply thresholding
+            if method == 'manual' and threshold is not None:
+                thresholded = explorer.threshold_image(image_num, method, threshold=threshold)
+            else:
+                thresholded = explorer.threshold_image(image_num, method)
+                
+            if thresholded is None:
+                print("Thresholding failed.")
+                return
+                
+            print(f"✅ Thresholding completed")
+            
+            # Save if requested
+            if save_file:
+                print(f"💾 Saving thresholded image to: {save_file}")
+                plt.imsave(save_file, thresholded, cmap='gray')
+                print(f"✅ Image saved successfully")
+                
+            # Show if requested
+            if show_image:
+                print("🖼️  Displaying thresholded image...")
+                plt.figure(figsize=(10, 8))
+                plt.imshow(thresholded, cmap='gray')
+                plt.title(f"Thresholded Image ({method}) - Image {image_num}")
+                plt.colorbar()
+                plt.show()
+                
+        except Exception as e:
+            print(f"Error applying threshold: {e}")
+    
+    def _command_roi(self):
+        """ROI command."""
+        filename = self.args.file
+        image_num = self.args.image
+        set_roi = self.args.set
+        x = self.args.x
+        y = self.args.y
+        width = self.args.width
+        height = self.args.height
+        analyze_roi = self.args.analyze
+        interactive = self.args.interactive
+        clear_roi = self.args.clear
+        
+        try:
+            explorer = TDMSFileExplorer(filename)
+            
+            if not explorer.has_image_data():
+                print("No image data found in file.")
+                return
+                
+            if set_roi:
+                print(f"🎯 Setting ROI at ({x}, {y}) with size {width}x{height}")
+                roi_coords = explorer.set_roi(image_num, x, y, width, height)
+                if roi_coords:
+                    print(f"✅ ROI set successfully: {roi_coords}")
+                else:
+                    print("Failed to set ROI")
+                    
+            elif interactive:
+                print("🖱️  Starting interactive ROI selection...")
+                print("Click and drag to select a rectangular region, then release.")
+                roi_coords = explorer.interactive_roi_selection(image_num)
+                if roi_coords:
+                    print(f"✅ ROI selected: {roi_coords}")
+                else:
+                    print("ROI selection cancelled or failed")
+                    
+            elif analyze_roi:
+                print(f"📊 Analyzing current ROI for image {image_num}...")
+                analysis = explorer.get_roi_analysis(image_num)
+                if analysis and 'roi' in analysis:
+                    roi_stats = analysis['roi']
+                    print(f"ROI Analysis Results:")
+                    print(f"  Area: {roi_stats['area']} pixels")
+                    print(f"  Min: {roi_stats['min']:.4f}")
+                    print(f"  Max: {roi_stats['max']:.4f}")
+                    print(f"  Mean: {roi_stats['mean']:.4f}")
+                    print(f"  Std: {roi_stats['std']:.4f}")
+                    print(f"  Median: {roi_stats['median']:.4f}")
+                else:
+                    print("No ROI is currently set or analysis failed")
+                    
+            elif clear_roi:
+                print("🧹 Clearing current ROI...")
+                # Create analyzer and clear ROI
+                analyzer = explorer.create_image_analyzer(image_num)
+                if analyzer:
+                    analyzer.clear_roi()
+                    print("✅ ROI cleared successfully")
+                else:
+                    print("Failed to clear ROI")
+                    
+            else:
+                print("No ROI operation specified. Use --set, --analyze, --interactive, or --clear.")
+                
+        except Exception as e:
+            print(f"Error with ROI operation: {e}")
+    
+    def _command_compare(self):
+        """Compare images command."""
+        filename = self.args.file
+        image1 = self.args.image1
+        image2 = self.args.image2
+        method = self.args.method
+        save_file = self.args.save
+        show_image = self.args.show
+        
+        try:
+            explorer = TDMSFileExplorer(filename)
+            
+            if not explorer.has_image_data():
+                print("No image data found in file.")
+                return
+                
+            print(f"🔄 Comparing images {image1} and {image2} using {method} method...")
+            
+            comparison = explorer.compare_images(image1, image2, method)
+            
+            if comparison is None:
+                print("Image comparison failed.")
+                return
+                
+            print(f"✅ Image comparison completed")
+            print(f"Comparison statistics:")
+            print(f"  Min difference: {comparison.min():.4f}")
+            print(f"  Max difference: {comparison.max():.4f}")
+            print(f"  Mean difference: {comparison.mean():.4f}")
+            print(f"  Std difference: {comparison.std():.4f}")
+            
+            # Save if requested
+            if save_file:
+                print(f"💾 Saving comparison result to: {save_file}")
+                plt.imsave(save_file, comparison, cmap='gray')
+                print(f"✅ Image saved successfully")
+                
+            # Show if requested
+            if show_image:
+                print("🖼️  Displaying comparison result...")
+                plt.figure(figsize=(10, 8))
+                plt.imshow(comparison, cmap='gray')
+                plt.title(f"Image Comparison ({method}) - Images {image1} vs {image2}")
+                plt.colorbar()
+                plt.show()
+                
+        except Exception as e:
+            print(f"Error comparing images: {e}")
+    
+    def _command_histogram(self):
+        """Histogram command."""
+        filename = self.args.file
+        image_num = self.args.image
+        bins = self.args.bins
+        log_scale = self.args.log
+        save_file = self.args.save
+        
+        try:
+            explorer = TDMSFileExplorer(filename)
+            
+            if not explorer.has_image_data():
+                print("No image data found in file.")
+                return
+                
+            print(f"📊 Creating histogram for image {image_num}...")
+            
+            histogram_data = explorer.get_image_histogram(image_num, bins)
+            
+            if histogram_data is None:
+                print("Histogram creation failed.")
+                return
+                
+            # Display histogram
+            plt.figure(figsize=(12, 6))
+            
+            # Find the center of each bin
+            bin_centers = [(histogram_data['bin_edges'][i] + histogram_data['bin_edges'][i+1]) / 2 
+                          for i in range(len(histogram_data['bin_edges']) - 1)]
+            
+            if log_scale:
+                plt.semilogy(bin_centers, histogram_data['hist'], 'b-')
+                plt.ylabel('Log Count')
+            else:
+                plt.plot(bin_centers, histogram_data['hist'], 'b-')
+                plt.ylabel('Count')
+                
+            plt.xlabel('Pixel Value')
+            plt.title(f"Histogram - Image {image_num}")
+            plt.grid(True, alpha=0.3)
+            
+            # Add statistics
+            stats = explorer.analyze_image(image_num)
+            if stats:
+                plt.figtext(0.7, 0.7, f"Mean: {stats['mean']:.2f}", bbox=dict(facecolor='white', alpha=0.8))
+                plt.figtext(0.7, 0.65, f"Std: {stats['std']:.2f}", bbox=dict(facecolor='white', alpha=0.8))
+                plt.figtext(0.7, 0.6, f"Min: {stats['min']:.2f}", bbox=dict(facecolor='white', alpha=0.8))
+                plt.figtext(0.7, 0.55, f"Max: {stats['max']:.2f}", bbox=dict(facecolor='white', alpha=0.8))
+            
+            plt.tight_layout()
+            plt.show()
+            
+            # Save if requested
+            if save_file:
+                print(f"💾 Saving histogram data to: {save_file}")
+                import json
+                with open(save_file, 'w') as f:
+                    json.dump(histogram_data, f, indent=2)
+                print(f"✅ Histogram data saved successfully")
+                
+        except Exception as e:
+            print(f"Error creating histogram: {e}")
+    
+    def _command_features(self):
+        """Features command."""
+        filename = self.args.file
+        image_num = self.args.image
+        method = self.args.method
+        json_output = self.args.json
+        
+        try:
+            explorer = TDMSFileExplorer(filename)
+            
+            if not explorer.has_image_data():
+                print("No image data found in file.")
+                return
+                
+            print(f"🔍 Detecting {method} features in image {image_num}...")
+            
+            features = explorer.detect_features(image_num, method)
+            
+            if features is None:
+                print("Feature detection failed.")
+                return
+                
+            if json_output:
+                import json
+                print(json.dumps(features, indent=2))
+            else:
+                print(f"✅ Feature detection completed")
+                print(f"Found {features.get('count', 0)} features")
+                
+                if method == 'blob':
+                    print(f"Blob features:")
+                    for i, blob in enumerate(features.get('blobs', [])[:10]):  # Show first 10
+                        print(f"  Blob {i+1}: x={blob['x']}, y={blob['y']}, sigma={blob['sigma']:.2f}")
+                    if len(features.get('blobs', [])) > 10:
+                        print(f"  ... and {len(features.get('blobs', [])) - 10} more")
+                        
+                elif method == 'corner':
+                    print(f"Corner features:")
+                    for i, corner in enumerate(features.get('corners', [])[:10]):  # Show first 10
+                        print(f"  Corner {i+1}: x={corner['x']}, y={corner['y']}")
+                    if len(features.get('corners', [])) > 10:
+                        print(f"  ... and {len(features.get('corners', [])) - 10} more")
+                        
+                elif method == 'edge':
+                    print(f"Edge features:")
+                    print(f"  Edge density: {features.get('edge_density', 0):.4f}")
+                    edge_pixels = features.get('edge_pixels', ([], []))
+                    print(f"  Total edge pixels: {len(edge_pixels[0]) if edge_pixels else 0}")
+                
+        except Exception as e:
+            print(f"Error detecting features: {e}")
+    
+    def _command_profile(self):
+        """Profile command."""
+        filename = self.args.file
+        image_num = self.args.image
+        direction = self.args.direction
+        position = self.args.position
+        save_file = self.args.save
+        
+        try:
+            explorer = TDMSFileExplorer(filename)
+            
+            if not explorer.has_image_data():
+                print("No image data found in file.")
+                return
+                
+            print(f"📈 Getting {direction} profile for image {image_num}...")
+            
+            profile_data = explorer.get_image_profile(image_num, direction, position)
+            
+            if profile_data is None:
+                print("Profile extraction failed.")
+                return
+                
+            # Display profile
+            plt.figure(figsize=(12, 6))
+            plt.plot(profile_data['x'], profile_data['y'], 'b-')
+            plt.xlabel('Position')
+            plt.ylabel('Intensity')
+            
+            if position is not None:
+                plt.title(f"{direction.capitalize()} Profile at position {position} - Image {image_num}")
+            else:
+                plt.title(f"{direction.capitalize()} Profile (average) - Image {image_num}")
+                
+            plt.grid(True, alpha=0.3)
+            plt.tight_layout()
+            plt.show()
+            
+            # Save if requested
+            if save_file:
+                print(f"💾 Saving profile data to: {save_file}")
+                import json
+                with open(save_file, 'w') as f:
+                    json.dump(profile_data, f, indent=2)
+                print(f"✅ Profile data saved successfully")
+                
+        except Exception as e:
+            print(f"Error getting profile: {e}")
 
 
 def main():

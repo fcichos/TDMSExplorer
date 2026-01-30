@@ -177,6 +177,17 @@ TDMSFileExplorer(filename: str)
 - Comprehensive CLI with multiple commands
 - Easy file listing and analysis
 - Image display and export
+
+### Image Analysis (New!)
+- Comprehensive image statistics and metrics
+- Image filtering (Gaussian, median, bilateral, etc.)
+- Edge detection (Canny, Sobel, Prewitt, Laplace)
+- Thresholding and segmentation
+- Region of Interest (ROI) operations
+- Image comparison and difference analysis
+- Histogram analysis and visualization
+- Feature detection (blobs, corners, edges)
+- Intensity profile extraction
 - Animation creation
 - Raw data access and statistics
 
