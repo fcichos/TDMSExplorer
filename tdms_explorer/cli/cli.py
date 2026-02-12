@@ -399,7 +399,7 @@ Examples:
             # Check if we're in a headless environment
             import matplotlib
             backend = matplotlib.get_backend()
-            is_headless = backend in ['Agg', 'pdf', 'ps', 'svg'] or 'inline' not in backend
+            is_headless = backend in ['Agg', 'pdf', 'ps', 'svg']
             
             if no_show or is_headless:
                 print("\n📊 Image Statistics:")
