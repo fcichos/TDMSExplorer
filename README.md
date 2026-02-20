@@ -177,6 +177,7 @@ TDMSFileExplorer(filename: str)
 - Comprehensive CLI with multiple commands
 - Easy file listing and analysis
 - Image display and export
+- Steering data inspection, plotting, and CSV export
 
 ### Image Analysis (New!)
 - Comprehensive image statistics and metrics
@@ -315,6 +316,47 @@ python -m tdms_explorer stats "file.tdms" --channels
 # All statistics
 python -m tdms_explorer stats "file.tdms" --images --channels
 ```
+
+#### 8. Steering Data
+
+The `steering` command reads a channel that stores per-frame steering data as a flat array and reshapes it into a 2-D matrix of **frames × values-per-frame**.
+
+```bash
+# Show summary (frame count, values per frame)
+python -m tdms_explorer steering "file.tdms" --group "Steering"
+
+# Override channel name (default: "Steering Data")
+python -m tdms_explorer steering "file.tdms" --group "Steering" --channel "MyChannel"
+
+# Override the number of frames (auto-detected from file metadata if omitted)
+python -m tdms_explorer steering "file.tdms" --group "Steering" --frames 100
+
+# Print all values for a specific frame
+python -m tdms_explorer steering "file.tdms" --group "Steering" --frame 42
+
+# Plot steering values for a specific frame
+python -m tdms_explorer steering "file.tdms" --group "Steering" --plot-frame 42
+
+# Save the frame plot to an image file
+python -m tdms_explorer steering "file.tdms" --group "Steering" --plot-frame 42 --save frame42.png
+
+# Export all steering data to CSV (rows = frames, columns = values per frame)
+python -m tdms_explorer steering "file.tdms" --group "Steering" --csv steering_data.csv
+```
+
+**Options summary**
+
+| Option | Short | Default | Description |
+|---|---|---|---|
+| `--group` | `-g` | *(required)* | Group name containing the steering channel |
+| `--channel` | `-c` | `"Steering Data"` | Channel name within the group |
+| `--frames` | | auto-detected | Override the number of frames |
+| `--frame` | | | Print all values for the given frame index |
+| `--plot-frame` | | | Plot values for the given frame index |
+| `--save` | | | Save the frame plot to a file (e.g. `frame0.png`) |
+| `--csv` | | | Export full steering matrix to a CSV file |
+
+**CSV format:** one row per frame, first column is the frame index followed by one column per value (`val_0`, `val_1`, …).
 
 ## 🔄 Migration Guide
 
