@@ -142,6 +142,19 @@ Examples:
         raw_parser.add_argument('--channel', '-c', required=True, help='Channel name')
         raw_parser.add_argument('--info', action='store_true', help='Show channel info only')
         raw_parser.add_argument('--save', help='Save raw data to file (numpy format)')
+        raw_parser.add_argument('--csv', help='Export channel data to CSV file')
+
+        # Plot command
+        plot_parser = subparsers.add_parser('plot', help='Plot channel data as a time series')
+        plot_parser.add_argument('file', help='TDMS file to read')
+        plot_parser.add_argument('--group', '-g', required=True, help='Group name')
+        plot_parser.add_argument('--channel', '-c', required=True, help='Channel name (repeat for multiple)', action='append', dest='channels')
+        plot_parser.add_argument('--save', help='Save plot to image file (e.g. plot.png)')
+        plot_parser.add_argument('--title', help='Plot title')
+        plot_parser.add_argument('--xlabel', default='Sample', help='X-axis label (default: Sample)')
+        plot_parser.add_argument('--ylabel', default='Value', help='Y-axis label (default: Value)')
+        plot_parser.add_argument('--start', type=int, default=0, help='Start sample index (default: 0)')
+        plot_parser.add_argument('--end', type=int, help='End sample index (default: last sample)')
         
         # Stats command
         stats_parser = subparsers.add_parser('stats', help='Show statistics about TDMS file')
@@ -278,6 +291,8 @@ Examples:
                 self._command_features()
             elif self.args.command == 'profile':
                 self._command_profile()
+            elif self.args.command == 'plot':
+                self._command_plot()
         except Exception as e:
             print(f"Error: {e}", file=sys.stderr)
             if hasattr(e, '__traceback__'):
@@ -559,6 +574,7 @@ Examples:
         channel_name = self.args.channel
         info_only = self.args.info
         save_file = self.args.save
+        csv_file = self.args.csv
         
         try:
             explorer = TDMSFileExplorer(filename)
@@ -609,7 +625,18 @@ Examples:
                         print(f"  File size: {os.path.getsize(save_file):,} bytes")
                     except Exception as e:
                         print(f"Error saving data: {e}")
-                
+
+                # Export to CSV if requested
+                if csv_file:
+                    try:
+                        np.savetxt(csv_file, data.flatten(), delimiter=',',
+                                   header=f"{group_name}/{channel_name}", comments='')
+                        print(f"\n✓ Exported channel data to CSV: {csv_file}")
+                        print(f"  Rows: {data.size:,}")
+                        print(f"  File size: {os.path.getsize(csv_file):,} bytes")
+                    except Exception as e:
+                        print(f"Error exporting to CSV: {e}")
+
         except Exception as e:
             print(f"Error accessing raw data: {e}")
     
@@ -1153,6 +1180,99 @@ Examples:
                 
         except Exception as e:
             print(f"Error getting profile: {e}")
+
+
+    def _command_plot(self):
+        """Plot channel data as a time series."""
+        filename = self.args.file
+        group_name = self.args.group
+        channel_names = self.args.channels
+        save_file = self.args.save
+        title = self.args.title
+        xlabel = self.args.xlabel
+        ylabel = self.args.ylabel
+        start = self.args.start
+        end = self.args.end
+
+        try:
+            explorer = TDMSFileExplorer(filename)
+
+            if group_name not in explorer.groups:
+                print(f"Error: Group '{group_name}' not found.")
+                print(f"Available groups: {', '.join(explorer.groups)}")
+                return
+
+            # Collect data for each requested channel
+            datasets = []
+            for channel_name in channel_names:
+                channels_in_group = explorer.channels[group_name].get('_channels', [])
+                if channel_name not in channels_in_group:
+                    print(f"Error: Channel '{channel_name}' not found in group '{group_name}'.")
+                    print(f"Available channels: {', '.join(channels_in_group)}")
+                    return
+                data = explorer.get_raw_channel_data(group_name, channel_name)
+                if data is None:
+                    print(f"Could not read channel data for '{channel_name}'.")
+                    return
+                data = data.flatten()
+                datasets.append((channel_name, data))
+
+            # Determine sample range
+            max_len = max(len(d) for _, d in datasets)
+            if end is None:
+                end = max_len - 1
+            end = min(end, max_len - 1)
+
+            if start < 0 or start > end:
+                print(f"Invalid sample range. Available: 0 to {max_len - 1}")
+                return
+
+            x = np.arange(start, end + 1)
+
+            # Build plot
+            fig, ax = plt.subplots(figsize=(12, 5))
+            for channel_name, data in datasets:
+                segment = data[start:end + 1]
+                ax.plot(x, segment, label=channel_name)
+
+            ax.set_xlabel(xlabel)
+            ax.set_ylabel(ylabel)
+            plot_title = title if title else f"{group_name} — {', '.join(channel_names)}"
+            ax.set_title(plot_title)
+            if len(datasets) > 1:
+                ax.legend()
+            ax.grid(True, alpha=0.3)
+            plt.tight_layout()
+
+            # Print summary statistics
+            for channel_name, data in datasets:
+                segment = data[start:end + 1]
+                print(f"Channel: {group_name}/{channel_name}")
+                print(f"  Samples: {start} to {end} ({len(segment):,} points)")
+                print(f"  Min: {segment.min():.6g}")
+                print(f"  Max: {segment.max():.6g}")
+                print(f"  Mean: {segment.mean():.6g}")
+                print(f"  Std: {segment.std():.6g}")
+
+            if save_file:
+                plt.savefig(save_file, dpi=150, bbox_inches='tight')
+                print(f"\nPlot saved to: {save_file}")
+                plt.close()
+                return
+
+            # Try interactive display; fall back gracefully
+            import matplotlib
+            backend = matplotlib.get_backend()
+            is_headless = backend in ['Agg', 'pdf', 'ps', 'svg']
+            if is_headless:
+                print(f"\nDisplay not available (backend: {backend}).")
+                print("Use '--save plot.png' to save the plot to a file.")
+                plt.close()
+            else:
+                plt.show()
+
+        except Exception as e:
+            print(f"Error plotting channel data: {e}")
 
 
 def main():
