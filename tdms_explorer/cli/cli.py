@@ -155,7 +155,26 @@ Examples:
         plot_parser.add_argument('--ylabel', default='Value', help='Y-axis label (default: Value)')
         plot_parser.add_argument('--start', type=int, default=0, help='Start sample index (default: 0)')
         plot_parser.add_argument('--end', type=int, help='End sample index (default: last sample)')
-        
+
+        # Steering command
+        steering_parser = subparsers.add_parser(
+            'steering',
+            help='Display and export Steering Data channel reshaped to frames × floats-per-frame'
+        )
+        steering_parser.add_argument('file', help='TDMS file to read')
+        steering_parser.add_argument('--group', '-g', required=True, help='Group name')
+        steering_parser.add_argument('--channel', '-c', default='Steering Data',
+                                     help='Channel name (default: "Steering Data")')
+        steering_parser.add_argument('--frames', type=int,
+                                     help='Number of frames (auto-detected from file metadata if omitted)')
+        steering_parser.add_argument('--frame', type=int,
+                                     help='Print steering values for a specific frame number')
+        steering_parser.add_argument('--plot-frame', type=int, dest='plot_frame',
+                                     help='Plot steering values for a specific frame number')
+        steering_parser.add_argument('--save', help='Save frame plot to image file (e.g. frame0.png)')
+        steering_parser.add_argument('--csv', help='Export all steering data to CSV '
+                                                   '(rows = frames, columns = values per frame)')
+
         # Stats command
         stats_parser = subparsers.add_parser('stats', help='Show statistics about TDMS file')
         stats_parser.add_argument('file', help='TDMS file to analyze')
@@ -293,6 +312,8 @@ Examples:
                 self._command_profile()
             elif self.args.command == 'plot':
                 self._command_plot()
+            elif self.args.command == 'steering':
+                self._command_steering()
         except Exception as e:
             print(f"Error: {e}", file=sys.stderr)
             if hasattr(e, '__traceback__'):
@@ -1273,6 +1294,143 @@ Examples:
 
         except Exception as e:
             print(f"Error plotting channel data: {e}")
+
+
+    def _command_steering(self):
+        """Display and export Steering Data channel reshaped to frames × floats-per-frame."""
+        filename = self.args.file
+        group_name = self.args.group
+        channel_name = self.args.channel
+        frames_override = self.args.frames
+        frame_num = self.args.frame
+        plot_frame_num = self.args.plot_frame
+        save_file = self.args.save
+        csv_file = self.args.csv
+
+        try:
+            explorer = TDMSFileExplorer(filename)
+
+            # Validate group
+            if group_name not in explorer.groups:
+                print(f"Error: Group '{group_name}' not found.")
+                print(f"Available groups: {', '.join(explorer.groups)}")
+                return
+
+            # Validate channel
+            channels = explorer.channels[group_name].get('_channels', [])
+            if channel_name not in channels:
+                print(f"Error: Channel '{channel_name}' not found in group '{group_name}'.")
+                print(f"Available channels: {', '.join(channels)}")
+                return
+
+            # Read raw data
+            data = explorer.get_raw_channel_data(group_name, channel_name)
+            if data is None:
+                print("Could not read channel data.")
+                return
+            data = data.flatten()
+
+            # Determine number of frames
+            if frames_override is not None:
+                num_frames = frames_override
+            elif 'frames' in explorer.metadata:
+                num_frames = int(explorer.metadata['frames'])
+            else:
+                print("Error: Could not determine number of frames from file metadata.")
+                print("Use --frames N to specify the number of frames explicitly.")
+                return
+
+            if num_frames <= 0:
+                print(f"Error: Invalid frame count ({num_frames}).")
+                return
+
+            # Handle non-divisible sizes by truncating to the nearest complete frame
+            total_size = data.size
+            if total_size % num_frames != 0:
+                truncated = (total_size // num_frames) * num_frames
+                print(f"Warning: Data size ({total_size:,}) is not evenly divisible by "
+                      f"{num_frames} frames. Truncating to {truncated:,} samples.")
+                data = data[:truncated]
+                total_size = truncated
+
+            floats_per_frame = total_size // num_frames
+            steering = data.reshape(num_frames, floats_per_frame)
+
+            print(f"Channel: {group_name}/{channel_name}")
+            print(f"  Total samples : {data.size:,}")
+            print(f"  Frames        : {num_frames}")
+            print(f"  Floats/frame  : {floats_per_frame}")
+            print(f"  Reshaped      : ({num_frames}, {floats_per_frame})")
+            print(f"  Data type     : {data.dtype}")
+            print(f"  Value range   : [{data.min():.6g}, {data.max():.6g}]")
+
+            # Print specific frame
+            if frame_num is not None:
+                if frame_num < 0 or frame_num >= num_frames:
+                    print(f"Error: Frame {frame_num} out of range (0 to {num_frames - 1}).")
+                    return
+                frame_data = steering[frame_num]
+                print(f"\nSteering data for frame {frame_num}:")
+                print("-" * 42)
+                for i, v in enumerate(frame_data):
+                    print(f"  [{i:5d}]  {v:.10g}")
+
+            # Plot specific frame
+            if plot_frame_num is not None:
+                if plot_frame_num < 0 or plot_frame_num >= num_frames:
+                    print(f"Error: Frame {plot_frame_num} out of range (0 to {num_frames - 1}).")
+                    return
+                self._plot_steering_frame(
+                    steering[plot_frame_num], plot_frame_num,
+                    group_name, channel_name, save_file
+                )
+
+            # Export CSV
+            if csv_file:
+                try:
+                    header = 'frame,' + ','.join(f'val_{i}' for i in range(floats_per_frame))
+                    frame_indices = np.arange(num_frames, dtype=data.dtype).reshape(-1, 1)
+                    export_data = np.hstack([frame_indices, steering])
+                    np.savetxt(csv_file, export_data, delimiter=',',
+                               header=header, comments='', fmt='%g')
+                    print(f"\nExported steering data to CSV: {csv_file}")
+                    print(f"  Rows    : {num_frames} (one per frame)")
+                    print(f"  Columns : {floats_per_frame + 1} "
+                          f"(frame index + {floats_per_frame} values)")
+                    print(f"  Size    : {os.path.getsize(csv_file):,} bytes")
+                except Exception as e:
+                    print(f"Error exporting to CSV: {e}")
+
+        except Exception as e:
+            print(f"Error accessing steering data: {e}")
+
+    def _plot_steering_frame(self, frame_data, frame_num, group_name, channel_name,
+                             save_file=None):
+        """Plot steering values for a single frame."""
+        fig, ax = plt.subplots(figsize=(12, 4))
+        x = np.arange(len(frame_data))
+        ax.plot(x, frame_data, linewidth=1)
+        ax.set_xlabel('Float Index')
+        ax.set_ylabel('Value')
+        ax.set_title(f'Steering Data — {group_name}/{channel_name}, Frame {frame_num}')
+        ax.grid(True, alpha=0.3)
+        plt.tight_layout()
+
+        if save_file:
+            plt.savefig(save_file, dpi=150, bbox_inches='tight')
+            print(f"\nPlot saved to: {save_file}")
+            plt.close()
+            return
+
+        import matplotlib
+        backend = matplotlib.get_backend()
+        is_headless = backend in ['Agg', 'pdf', 'ps', 'svg']
+        if is_headless:
+            print(f"\nDisplay not available (backend: {backend}).")
+            print("Use '--save plot.png' to save the plot to a file.")
+            plt.close()
+        else:
+            plt.show()
 
 
 def main():
