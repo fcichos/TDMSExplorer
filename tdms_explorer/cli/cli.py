@@ -11,9 +11,14 @@ import textwrap
 from typing import List, Optional
 
 try:
-    from tdms_explorer.core import TDMSFileExplorer, list_tdms_files, create_animation_from_tdms
+    from tdms_explorer.core import (
+        TDMSFileExplorer, list_tdms_files, create_animation_from_tdms,
+        save_images, save_video, process_tdms_files, HAS_IMAGEIO,
+    )
     import numpy as np
     import matplotlib.pyplot as plt
+    from pathlib import Path
+    from multiprocessing import cpu_count
 except ImportError as e:
     print(f"Error: {e}")
     print("Please ensure all dependencies are installed.")
@@ -265,7 +270,34 @@ Examples:
                                     default='horizontal', help='Profile direction (default: horizontal)')
         profile_parser.add_argument('--position', '-p', type=int, help='Position for line profile')
         profile_parser.add_argument('--save', help='Save profile data to JSON file')
-        
+
+        convert_parser = subparsers.add_parser(
+            'convert',
+            help='Batch-convert TDMS files to PNG images and/or MP4 video',
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+            epilog=textwrap.dedent('''\
+Examples:
+  tdms-explorer convert input.tdms -o output_dir
+  tdms-explorer convert input.tdms -o output --to-mp4 --fps 30
+  tdms-explorer convert "file_{:03d}.tdms" -o output --start-index 1 --num-files 10
+  tdms-explorer convert input.tdms --list-structure
+  tdms-explorer convert input.tdms -o output --no-normed --dtype uint8 --workers 4
+            ''')
+        )
+        convert_parser.add_argument('input', help='Input TDMS file, directory, or pattern ({:03d})')
+        convert_parser.add_argument('-o', '--output', help='Output directory (required unless --list-structure)')
+        convert_parser.add_argument('--list-structure', action='store_true', help='List TDMS structure and exit')
+        convert_parser.add_argument('--base-name', type=str, default=None, help='Base name for output files')
+        convert_parser.add_argument('--dtype', choices=['uint8', 'uint16', 'float32'], default=None, help='Output data type')
+        convert_parser.add_argument('--workers', type=int, default=None, help=f'Parallel workers (default: {cpu_count()})')
+        convert_parser.add_argument('--to-mp4', action='store_true', help='Also create MP4 video')
+        convert_parser.add_argument('--fps', type=float, default=30.0, help='Video FPS (default: 30)')
+        convert_parser.add_argument('-f', '--force', action='store_true', help='Overwrite existing files')
+        convert_parser.add_argument('--normed', action='store_true', default=True, help='Normalize to full dynamic range (default)')
+        convert_parser.add_argument('--no-normed', dest='normed', action='store_false', help='Preserve raw values')
+        convert_parser.add_argument('--start-index', type=int, default=1, help='Start index for pattern matching')
+        convert_parser.add_argument('--num-files', type=int, default=None, help='Max number of files to process')
+
         return parser
     
     def parse_args(self, args=None):
@@ -314,6 +346,8 @@ Examples:
                 self._command_plot()
             elif self.args.command == 'steering':
                 self._command_steering()
+            elif self.args.command == 'convert':
+                self._command_convert()
         except Exception as e:
             print(f"Error: {e}", file=sys.stderr)
             if hasattr(e, '__traceback__'):
@@ -1431,6 +1465,51 @@ Examples:
             plt.close()
         else:
             plt.show()
+
+
+    def _command_convert(self):
+        args = self.args
+        dtype_map = {'uint8': np.uint8, 'uint16': np.uint16, 'float32': np.float32}
+        dtype = dtype_map.get(args.dtype) if args.dtype else None
+
+        if args.list_structure:
+            input_path = Path(args.input)
+            if '{' in args.input:
+                input_path = Path(args.input.format(args.start_index))
+            if not input_path.exists():
+                print(f"Error: File not found: {input_path}", file=sys.stderr)
+                sys.exit(1)
+            TDMSFileExplorer(str(input_path)).print_contents()
+            return
+
+        if not args.output:
+            print("Error: --output is required unless using --list-structure", file=sys.stderr)
+            sys.exit(1)
+
+        if args.to_mp4 and not HAS_IMAGEIO:
+            print("Error: imageio required for video. Install with: pip install tdms_explorer[video]", file=sys.stderr)
+            sys.exit(1)
+
+        total_saved = process_tdms_files(
+            input_pattern=args.input,
+            output_dir=Path(args.output),
+            start_index=args.start_index,
+            num_files=args.num_files,
+            base_name=args.base_name,
+            dtype=dtype,
+            num_workers=args.workers,
+            to_video=args.to_mp4,
+            fps=args.fps,
+            force=args.force,
+            normed=args.normed,
+        )
+
+        out = Path(args.output)
+        if args.to_mp4:
+            num_videos = len(list(out.glob('*.mp4')))
+            print(f"Converted {total_saved} images and {num_videos} video(s) to {out}")
+        else:
+            print(f"Converted {total_saved} images to {out}")
 
 
 def main():

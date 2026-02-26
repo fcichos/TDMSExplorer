@@ -27,26 +27,17 @@ The package requires:
 - `numpy` - For numerical operations
 - `matplotlib` - For visualization
 - `PIL` (Pillow) - For image handling
-- `ffmpeg` - For animation creation (optional)
+- `scikit-image` - For image analysis features
+- `opencv-python` - For image analysis features
+- `scipy` - For image analysis features
 
-Install dependencies:
-
-```bash
-pip install nptdms numpy matplotlib pillow
-```
-
-For animation support:
+Install with video/batch conversion support:
 
 ```bash
-# On macOS
-brew install ffmpeg
-
-# On Linux (Debian/Ubuntu)
-sudo apt-get install ffmpeg
-
-# On Windows (using conda)
-conda install -c conda-forge ffmpeg
+pip install -e ".[video]"
 ```
+
+The `[video]` extra installs `imageio` and `imageio-ffmpeg` for MP4 export via `save_video()` and `tdms-explorer convert --to-mp4`.
 
 ## 🚀 Quick Start
 
@@ -72,6 +63,18 @@ explorer.write_images('output_images')
 
 # Write single image
 explorer.write_image(0, 'single_image.png')
+```
+
+### Batch Conversion
+
+```python
+from tdms_explorer import TDMSFileExplorer, save_images, save_video
+import numpy as np
+
+explorer = TDMSFileExplorer('experiment.tdms')
+images = explorer.extract_images()
+save_images(images, 'output_pngs', 'frame', dtype=np.uint8, normed=True)
+save_video(images, 'output.mp4', fps=30)
 ```
 
 ### Command Line Interface
@@ -124,7 +127,7 @@ TDMSFileExplorer(filename: str)
 
 **Image Extraction**
 
-- `extract_images() -> Optional[np.ndarray]`: Extract all images as numpy array
+- `extract_images() -> Optional[np.ndarray]`: Extract images (auto-detects dimensions from metadata or common patterns)
 - `get_image_data(image_num: int) -> Optional[np.ndarray]`: Get single image as numpy array
 
 **Visualization**
@@ -145,6 +148,14 @@ TDMSFileExplorer(filename: str)
 
 - `list_tdms_files(directory: str = ".") -> List[str]`: List TDMS files in directory
 - `create_animation_from_tdms(filename: str, output_path: str, fps: int = 10, cmap: str = 'gray')`: Create and save animation
+
+### Converter Functions
+
+Batch conversion with dtype handling, normalization, skip-existing, and parallel processing.
+
+- `save_images(images, output_dir, base_name, start_index=1, dtype=None, force=False, normed=True) -> int`: Batch-save frames as PNG with dtype conversion (uint8/uint16/float32) and normalization; skips existing files unless `force=True`
+- `save_video(images, output_path, fps=30.0, dtype=None, force=False, normed=True) -> bool`: Write MP4 via imageio (requires `[video]` extra)
+- `process_tdms_files(input_pattern, output_dir, ...) -> int`: Multi-file batch processing with pattern matching and `multiprocessing.Pool`
 
 ## 🎯 Features
 
@@ -167,6 +178,13 @@ TDMSFileExplorer(filename: str)
 - Write individual images to files (PNG, JPG, etc.)
 - Export complete image series
 - Customizable filename prefixes and formats
+
+### Batch Conversion
+- Convert TDMS to PNG/MP4 with explicit image dimensions
+- Dtype conversion (uint8, uint16, float32) with normalization control
+- Skip existing files (resume capability)
+- Parallel processing via multiprocessing
+- Pattern matching for numbered file sequences
 
 ### Raw Data Access
 - Access raw channel data for custom processing
@@ -196,12 +214,13 @@ TDMSFileExplorer(filename: str)
 
 ```
 tdms_explorer/
-├── __init__.py          # Package initialization
-├── __main__.py         # Main entry point for CLI
-├── core.py             # Core functionality
+├── __init__.py          # Package initialization and public API
+├── __main__.py          # Entry point for `python -m tdms_explorer`
+├── core.py              # Explorer class, converter functions, utilities
+├── image_analysis.py    # Image filtering, edge detection, ROI, histograms
 └── cli/
-    ├── __init__.py      # CLI module initialization
-    └── cli.py           # Command line interface
+    ├── __init__.py
+    └── cli.py           # CLI with subcommands (list, info, show, convert, ...)
 ```
 
 ## 🔧 Command Line Usage
@@ -317,7 +336,32 @@ python -m tdms_explorer stats "file.tdms" --channels
 python -m tdms_explorer stats "file.tdms" --images --channels
 ```
 
-#### 8. Steering Data
+#### 8. Batch Convert (TDMS to PNG/MP4)
+
+```bash
+# Convert single file to PNG
+tdms-explorer convert input.tdms -o output_dir
+
+# Convert with explicit dimensions
+tdms-explorer convert input.tdms -o output --width 512 --height 512
+
+# Also create MP4 video
+tdms-explorer convert input.tdms -o output --to-mp4 --fps 30
+
+# Batch convert numbered files
+tdms-explorer convert "file_{:03d}.tdms" -o output --start-index 1 --num-files 10
+
+# List TDMS structure without converting
+tdms-explorer convert input.tdms --list-structure
+
+# Force overwrite, output as uint8, no normalization
+tdms-explorer convert input.tdms -o output --force --dtype uint8 --no-normed
+
+# Parallel processing with 4 workers
+tdms-explorer convert input.tdms -o output --workers 4
+```
+
+#### 9. Steering Data
 
 The `steering` command reads a channel that stores per-frame steering data as a flat array and reshapes it into a 2-D matrix of **frames × values-per-frame**.
 
