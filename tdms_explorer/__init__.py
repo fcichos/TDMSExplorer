@@ -11,7 +11,7 @@ Main modules:
 
 from .core import (
     TDMSFileExplorer, list_tdms_files, create_animation_from_tdms,
-    save_images, save_video, process_tdms_files,
+    process_tdms_files,
 )
 from .cli.cli import main as cli_main
 

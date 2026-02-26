@@ -37,7 +37,7 @@ Install with video/batch conversion support:
 pip install -e ".[video]"
 ```
 
-The `[video]` extra installs `imageio` and `imageio-ffmpeg` for MP4 export via `save_video()` and `tdms-explorer convert --to-mp4`.
+The `[video]` extra installs `imageio` and `imageio-ffmpeg` for MP4 export via `write_video()` and `tdms-explorer convert --to-mp4`.
 
 ## 🚀 Quick Start
 
@@ -58,23 +58,14 @@ explorer.display_image(0)
 # Display animation
 explorer.display_animation(fps=15)
 
-# Write all images to directory
-explorer.write_images('output_images')
+# Write all images as PNG (with dtype conversion and normalization)
+explorer.write_images('output_images', dtype=np.uint8, normed=True)
 
 # Write single image
-explorer.write_image(0, 'single_image.png')
-```
+explorer.write_image(0, 'single_image.png', dtype=np.uint8)
 
-### Batch Conversion
-
-```python
-from tdms_explorer import TDMSFileExplorer, save_images, save_video
-import numpy as np
-
-explorer = TDMSFileExplorer('experiment.tdms')
-images = explorer.extract_images()
-save_images(images, 'output_pngs', 'frame', dtype=np.uint8, normed=True)
-save_video(images, 'output.mp4', fps=30)
+# Write video (requires pip install tdms_explorer[video])
+explorer.write_video('output.mp4', fps=30, dtype=np.uint8)
 ```
 
 ### Command Line Interface
@@ -137,8 +128,9 @@ TDMSFileExplorer(filename: str)
 
 **Export**
 
-- `write_image(image_num: int, output_path: str, cmap: str = 'gray', overwrite: bool = False)`: Write single image
-- `write_images(output_dir: str, start_frame: int = 0, end_frame: Optional[int] = None, cmap: str = 'gray', prefix: str = 'output_', format: str = 'png')`: Write image series
+- `write_image(image_num, output_path, dtype=None, force=False, normed=True) -> bool`: Write single image as PNG with dtype conversion
+- `write_images(output_dir, base_name=None, start_frame=0, end_frame=None, dtype=None, force=False, normed=True) -> int`: Batch-write frames as PNG; skips existing unless `force=True`
+- `write_video(output_path, start_frame=0, end_frame=None, fps=30.0, dtype=None, force=False, normed=True) -> bool`: Write MP4 (requires `[video]` extra)
 
 **Raw Data Access**
 
@@ -149,12 +141,8 @@ TDMSFileExplorer(filename: str)
 - `list_tdms_files(directory: str = ".") -> List[str]`: List TDMS files in directory
 - `create_animation_from_tdms(filename: str, output_path: str, fps: int = 10, cmap: str = 'gray')`: Create and save animation
 
-### Converter Functions
+### Batch Processing
 
-Batch conversion with dtype handling, normalization, skip-existing, and parallel processing.
-
-- `save_images(images, output_dir, base_name, start_index=1, dtype=None, force=False, normed=True) -> int`: Batch-save frames as PNG with dtype conversion (uint8/uint16/float32) and normalization; skips existing files unless `force=True`
-- `save_video(images, output_path, fps=30.0, dtype=None, force=False, normed=True) -> bool`: Write MP4 via imageio (requires `[video]` extra)
 - `process_tdms_files(input_pattern, output_dir, ...) -> int`: Multi-file batch processing with pattern matching and `multiprocessing.Pool`
 
 ## 🎯 Features
@@ -456,7 +444,7 @@ from tdms_explorer import TDMSFileExplorer
 explorer = TDMSFileExplorer('experiment.tdms')
 
 # Export first 100 images
-explorer.write_images('experiment_images', start_frame=0, end_frame=99)
+explorer.write_images('experiment_images', start_frame=0, end_frame=100, dtype=np.uint8)
 
 # Create animation of first 50 images
 from tdms_explorer import create_animation_from_tdms

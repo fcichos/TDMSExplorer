@@ -13,7 +13,7 @@ from typing import List, Optional
 try:
     from tdms_explorer.core import (
         TDMSFileExplorer, list_tdms_files, create_animation_from_tdms,
-        save_images, save_video, process_tdms_files, HAS_IMAGEIO,
+        process_tdms_files, HAS_IMAGEIO,
     )
     import numpy as np
     import matplotlib.pyplot as plt
