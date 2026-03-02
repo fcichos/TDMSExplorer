@@ -6,6 +6,8 @@ and launch the TDMS Explorer Panel application from JupyterLab's launcher.
 """
 
 import os
+import shutil
+import sys
 
 
 def setup_tdms_explorer():
@@ -18,6 +20,11 @@ def setup_tdms_explorer():
     # Resolve the path to panel_app.py relative to this file
     app_path = os.path.join(os.path.dirname(__file__), "panel_app.py")
 
+    # Find the panel executable — use the same environment as this Python
+    panel_cmd = shutil.which("panel") or os.path.join(
+        os.path.dirname(sys.executable), "panel"
+    )
+
     # Optional: SVG icon for the JupyterLab launcher tile
     icon_path = os.path.join(os.path.dirname(__file__), "static", "icon.svg")
     launcher_entry = {
@@ -29,7 +36,7 @@ def setup_tdms_explorer():
 
     return {
         "command": [
-            "panel",
+            panel_cmd,
             "serve",
             app_path,
             "--port",
