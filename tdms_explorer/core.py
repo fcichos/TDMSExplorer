@@ -619,38 +619,56 @@ def list_tdms_files(directory: str = ".") -> List[str]:
 
 
 def create_animation_from_tdms(filename: str, output_path: str,
-                               fps: int = 10, cmap: str = 'gray'):
+                               fps: int = 10, cmap: str = 'gray',
+                               steering_xy: Optional[np.ndarray] = None):
     """
     Create and save an animation from a TDMS file.
-    
+
     Args:
         filename: TDMS file path
         output_path: Output animation file path (e.g., 'animation.mp4')
         fps: Frames per second
         cmap: Matplotlib colormap to use
+        steering_xy: Optional array of shape (frames, N>=2) with steering coordinates.
+                     The first two columns are used as (x, y) and drawn as a red cross
+                     on each frame.
     """
     explorer = TDMSFileExplorer(filename)
     images = explorer.extract_images()
-    
+
     if images is None:
         print("No image data found.")
         return
-    
+
     fig, ax = plt.subplots(figsize=(10, 8))
     img = ax.imshow(images[0, :, :], cmap=cmap)
-    plt.title(f"Animation from {filename}")
     plt.colorbar(img)
-    
+
+    # Initialise optional steering marker
+    scatter = None
+    if steering_xy is not None and len(steering_xy) > 0:
+        x0, y0 = float(steering_xy[0, -2]), float(steering_xy[0, -1])
+        scatter = ax.scatter([x0], [y0], c='red', s=150, marker='+',
+                             linewidths=2, zorder=5)
+        ax.set_title(f"Frame 0  |  x={x0:.4g}, y={y0:.4g}")
+    else:
+        ax.set_title("Frame 0")
+
     def update(frame):
         img.set_array(images[frame, :, :])
-        ax.set_title(f"Frame {frame}")
-        return img,
-    
+        if scatter is not None and frame < len(steering_xy):
+            x, y = float(steering_xy[frame, -2]), float(steering_xy[frame, -1])
+            scatter.set_offsets([[x, y]])
+            ax.set_title(f"Frame {frame}  |  x={x:.4g}, y={y:.4g}")
+        else:
+            ax.set_title(f"Frame {frame}")
+        return [img] + ([scatter] if scatter is not None else [])
+
     ani = FuncAnimation(fig, update, frames=range(images.shape[0]),
-                      interval=1000/fps, blit=True)
-    
+                        interval=1000/fps, blit=False)
+
     # Save animation
     ani.save(output_path, writer='ffmpeg', fps=fps)
     print(f"Animation saved to {output_path}")
-    
+
     plt.close()

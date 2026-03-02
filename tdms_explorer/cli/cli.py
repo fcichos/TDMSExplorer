@@ -112,6 +112,12 @@ Examples:
         show_parser.add_argument('--cmap', default='gray', help='Colormap to use (default: gray)')
         show_parser.add_argument('--no-show', action='store_true', help='Don\'t display image (show statistics instead)')
         show_parser.add_argument('--save', help='Save image to file instead of displaying')
+        show_parser.add_argument('--show-steering', action='store_true', dest='show_steering',
+                                 help='Overlay steering position (first two values) on image')
+        show_parser.add_argument('--steering-group', default=None, dest='steering_group',
+                                 help='Group name containing steering channel (auto-detected if omitted)')
+        show_parser.add_argument('--steering-channel', default='Steering Data', dest='steering_channel',
+                                 help='Steering channel name (default: "Steering Data")')
         
         # Animate command
         animate_parser = subparsers.add_parser('animate', help='Create animation from TDMS file')
@@ -122,6 +128,12 @@ Examples:
         animate_parser.add_argument('--start', type=int, default=0, help='Start frame (default: 0)')
         animate_parser.add_argument('--end', type=int, help='End frame (default: last frame)')
         animate_parser.add_argument('--no-display', action='store_true', help='Don\'t display animation')
+        animate_parser.add_argument('--show-steering', action='store_true', dest='show_steering',
+                                    help='Overlay steering position (first two values) on each frame')
+        animate_parser.add_argument('--steering-group', default=None, dest='steering_group',
+                                    help='Group name containing steering channel (auto-detected if omitted)')
+        animate_parser.add_argument('--steering-channel', default='Steering Data', dest='steering_channel',
+                                    help='Steering channel name (default: "Steering Data")')
         
         # Export command
         export_parser = subparsers.add_parser('export', help='Export images from TDMS file')
@@ -387,6 +399,56 @@ Examples:
         except Exception as e:
             print(f"Error analyzing file: {e}")
     
+    def _load_steering_xy(self, explorer, group_name, channel_name):
+        """
+        Load steering channel and return as (frames, N) array, or None on failure.
+        If group_name is None, auto-detect the first group containing channel_name.
+        """
+        if group_name is None:
+            for g in explorer.groups:
+                if channel_name in explorer.channels[g].get('_channels', []):
+                    group_name = g
+                    break
+            if group_name is None:
+                print(f"Warning: Could not find steering channel '{channel_name}' in any group. "
+                      f"Skipping overlay.")
+                return None
+
+        if group_name not in explorer.groups:
+            print(f"Warning: Steering group '{group_name}' not found. Skipping overlay.")
+            return None
+
+        channels = explorer.channels[group_name].get('_channels', [])
+        if channel_name not in channels:
+            print(f"Warning: Steering channel '{channel_name}' not found in group "
+                  f"'{group_name}'. Skipping overlay.")
+            return None
+
+        data = explorer.get_raw_channel_data(group_name, channel_name)
+        if data is None:
+            return None
+        data = data.flatten()
+
+        if 'frames' not in explorer.metadata:
+            print("Warning: Cannot determine frame count from metadata. Skipping overlay.")
+            return None
+
+        num_frames = int(explorer.metadata['frames'])
+        if num_frames <= 0:
+            return None
+
+        total = data.size
+        if total % num_frames != 0:
+            total = (total // num_frames) * num_frames
+            data = data[:total]
+
+        floats_per_frame = total // num_frames
+        if floats_per_frame < 2:
+            print("Warning: Steering data has fewer than 2 values per frame. Skipping overlay.")
+            return None
+
+        return data.reshape(num_frames, floats_per_frame)
+
     def _command_show(self):
         """Show image command."""
         filename = self.args.file
@@ -394,6 +456,9 @@ Examples:
         cmap = self.args.cmap
         no_show = self.args.no_show
         save_file = self.args.save
+        show_steering = self.args.show_steering
+        steering_group = self.args.steering_group
+        steering_channel = self.args.steering_channel
         
         try:
             explorer = TDMSFileExplorer(filename)
@@ -415,14 +480,32 @@ Examples:
             print(f"Shape: {images.shape[1]}x{images.shape[2]}")
             print(f"Data range: {images[image_num].min():.2f} to {images[image_num].max():.2f}")
             print(f"Data type: {images.dtype}")
-            
+
+            # Load steering data if requested
+            steering_xy = None
+            if show_steering:
+                steering_xy = self._load_steering_xy(explorer, steering_group, steering_channel)
+                if steering_xy is not None and image_num < len(steering_xy):
+                    x, y = float(steering_xy[image_num, -2]), float(steering_xy[image_num, -1])
+                    print(f"Steering position: x={x:.6g}, y={y:.6g}")
+
             # Handle save option first
             if save_file:
                 print(f"\n💾 Saving image to: {save_file}")
-                explorer.write_image(image_num, save_file, cmap=cmap, overwrite=True)
+                if steering_xy is not None and image_num < len(steering_xy):
+                    x, y = float(steering_xy[image_num, -2]), float(steering_xy[image_num, -1])
+                    fig, ax = plt.subplots(figsize=(10, 8))
+                    im = ax.imshow(images[image_num, :, :], cmap=cmap)
+                    plt.colorbar(im, ax=ax)
+                    ax.scatter([x], [y], c='red', s=150, marker='+', linewidths=2, zorder=5)
+                    ax.set_title(f"Frame {image_num}  |  x={x:.4g}, y={y:.4g}")
+                    plt.tight_layout()
+                    plt.savefig(save_file, dpi=150, bbox_inches='tight')
+                    plt.close()
+                else:
+                    explorer.write_image(image_num, save_file, cmap=cmap, overwrite=True)
                 print(f"✅ Image saved successfully!")
-                
-                # Also show statistics when saving
+
                 print(f"\n📊 Image Statistics:")
                 img_data = images[image_num, :, :]
                 print(f"  Min: {img_data.min():.4f}")
@@ -431,12 +514,12 @@ Examples:
                 print(f"  Std: {img_data.std():.4f}")
                 print(f"  Median: {np.median(img_data):.4f}")
                 return
-            
+
             # Check if we're in a headless environment
             import matplotlib
             backend = matplotlib.get_backend()
             is_headless = backend in ['Agg', 'pdf', 'ps', 'svg']
-            
+
             if no_show or is_headless:
                 print("\n📊 Image Statistics:")
                 img_data = images[image_num, :, :]
@@ -445,11 +528,10 @@ Examples:
                 print(f"  Mean: {img_data.mean():.4f}")
                 print(f"  Std: {img_data.std():.4f}")
                 print(f"  Median: {np.median(img_data):.4f}")
-                
-                # Offer to save the image
+
                 print(f"\n💾 Tip: Use '--save image.png' to save this image to a file")
                 print(f"🎨 Tip: Use '--no-show' to skip display in GUI environments")
-                
+
                 if is_headless:
                     print(f"\n⚠️  Display not available in this environment (backend: {backend})")
                     print(f"   Try running in a terminal with GUI support or use '--save' to export the image")
@@ -458,7 +540,17 @@ Examples:
             else:
                 try:
                     print("\n🖼️  Displaying image...")
-                    explorer.display_image(image_num, cmap=cmap)
+                    if steering_xy is not None and image_num < len(steering_xy):
+                        x, y = float(steering_xy[image_num, -2]), float(steering_xy[image_num, -1])
+                        fig, ax = plt.subplots(figsize=(10, 8))
+                        im = ax.imshow(images[image_num, :, :], cmap=cmap)
+                        plt.colorbar(im, ax=ax)
+                        ax.scatter([x], [y], c='red', s=150, marker='+', linewidths=2, zorder=5)
+                        ax.set_title(f"Frame {image_num}  |  x={x:.4g}, y={y:.4g}")
+                        plt.tight_layout()
+                        plt.show()
+                    else:
+                        explorer.display_image(image_num, cmap=cmap)
                 except Exception as display_error:
                     print(f"\n❌ Could not display image: {display_error}")
                     print("   Falling back to statistics display...")
@@ -483,6 +575,9 @@ Examples:
         start = self.args.start
         end = self.args.end
         no_display = self.args.no_display
+        show_steering = self.args.show_steering
+        steering_group = self.args.steering_group
+        steering_channel = self.args.steering_channel
         
         try:
             explorer = TDMSFileExplorer(filename)
@@ -508,9 +603,16 @@ Examples:
             print(f"Frames: {start} to {end} ({total_frames} frames)")
             print(f"FPS: {fps}")
             print(f"Output: {output}")
-            
+
+            # Load steering data if requested
+            steering_xy = None
+            if show_steering:
+                explorer = TDMSFileExplorer(filename)
+                steering_xy = self._load_steering_xy(explorer, steering_group, steering_channel)
+
             # Create animation
-            create_animation_from_tdms(filename, output, fps=fps, cmap=cmap)
+            create_animation_from_tdms(filename, output, fps=fps, cmap=cmap,
+                                       steering_xy=steering_xy)
             
             if not no_display:
                 print(f"\nAnimation created: {output}")

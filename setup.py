@@ -61,10 +61,19 @@ setup(
             "sphinx>=3.0.0",
             "sphinx-rtd-theme>=0.5.0",
         ],
+        "panel": [
+            "panel>=1.0",
+            "bokeh>=3.0",
+            "holoviews>=1.15",
+            "jupyter-server-proxy>=4.0",
+        ],
     },
     entry_points={
         "console_scripts": [
             "tdms-explorer=tdms_explorer.cli.cli:main",
+        ],
+        "jupyter_serverproxy_servers": [
+            "tdms-explorer = tdms_explorer.jupyter_config:setup_tdms_explorer",
         ],
     },
     package_data={
