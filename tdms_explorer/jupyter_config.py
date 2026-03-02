@@ -36,8 +36,6 @@ def setup_tdms_explorer():
             "{port}",
             "--allow-websocket-origin",
             "*",
-            "--prefix",
-            "{base_url}tdms-explorer",
         ],
         "timeout": 20,
         "launcher_entry": launcher_entry,
