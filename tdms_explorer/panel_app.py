@@ -489,7 +489,7 @@ if __name__ == "__main__":
 
     origins = [args.allow_websocket_origin] if args.allow_websocket_origin != "*" else ["*"]
     pn.serve(
-        {"/": create_app},
+        create_app,
         port=args.port,
         allow_websocket_origin=origins,
         show=args.show,
