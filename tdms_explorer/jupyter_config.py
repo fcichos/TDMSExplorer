@@ -34,12 +34,6 @@ def setup_tdms_explorer():
     if os.path.isfile(icon_path):
         launcher_entry["icon_path"] = icon_path
 
-    def _mappath(path):
-        """Rewrite the proxy root to the Panel app endpoint."""
-        if path in ("", "/"):
-            return "/panel_app"
-        return path
-
     return {
         "command": [
             panel_cmd,
@@ -49,9 +43,11 @@ def setup_tdms_explorer():
             "{port}",
             "--allow-websocket-origin",
             "*",
+            "--prefix",
+            "{base_url}tdms-explorer",
         ],
+        "absolute_url": True,
         "timeout": 20,
-        "mappath": _mappath,
         "launcher_entry": launcher_entry,
         "new_browser_tab": True,
     }
