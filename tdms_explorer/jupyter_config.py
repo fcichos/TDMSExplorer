@@ -30,6 +30,7 @@ def setup_tdms_explorer():
     launcher_entry = {
         "title": "TDMS Explorer",
         "enabled": True,
+        "path_info": "panel_app",
     }
     if os.path.isfile(icon_path):
         launcher_entry["icon_path"] = icon_path
@@ -45,9 +46,11 @@ def setup_tdms_explorer():
             "*",
             "--prefix",
             "{base_url}tdms-explorer",
+            "--log-level",
+            "debug",
         ],
         "absolute_url": True,
-        "timeout": 20,
+        "timeout": 30,
         "launcher_entry": launcher_entry,
         "new_browser_tab": True,
     }
