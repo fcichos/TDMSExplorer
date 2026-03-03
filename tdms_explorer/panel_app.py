@@ -472,10 +472,28 @@ class TDMSExplorerApp(param.Parameterized):
 # ------------------------------------------------------------------
 
 def create_app():
-    """Create and return the Panel application (used by panel serve)."""
+    """Create and return the Panel application."""
     app = TDMSExplorerApp()
     return app.view()
 
 
-# When served directly: panel serve tdms_explorer/panel_app.py
-create_app().servable()
+if __name__ == "__main__":
+    # Direct execution: python panel_app.py --port 5006
+    import argparse
+
+    parser = argparse.ArgumentParser(description="TDMS Explorer Panel App")
+    parser.add_argument("--port", type=int, default=5006)
+    parser.add_argument("--allow-websocket-origin", default="*")
+    parser.add_argument("--show", action="store_true")
+    args = parser.parse_args()
+
+    origins = [args.allow_websocket_origin] if args.allow_websocket_origin != "*" else ["*"]
+    pn.serve(
+        {"/": create_app},
+        port=args.port,
+        allow_websocket_origin=origins,
+        show=args.show,
+    )
+else:
+    # When served via: panel serve panel_app.py
+    create_app().servable()
