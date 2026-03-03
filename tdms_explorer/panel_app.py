@@ -57,7 +57,7 @@ class TDMSExplorerApp(param.Parameterized):
 
     # --- Compare parameters ---
     compare_frame_a = param.Integer(default=0, bounds=(0, 0), doc="Frame A")
-    compare_frame_b = param.Integer(default=1, bounds=(0, 0), doc="Frame B")
+    compare_frame_b = param.Integer(default=0, bounds=(0, 0), doc="Frame B")
     compare_method = param.Selector(
         default="difference", objects=["difference", "absolute", "relative"], doc="Comparison method"
     )
