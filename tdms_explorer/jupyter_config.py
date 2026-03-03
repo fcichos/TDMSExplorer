@@ -30,10 +30,22 @@ def setup_tdms_explorer():
     launcher_entry = {
         "title": "TDMS Explorer",
         "enabled": True,
-        "path_info": "panel_app",
     }
     if os.path.isfile(icon_path):
         launcher_entry["icon_path"] = icon_path
+
+    def _mappath(path):
+        """Prepend /panel_app so all proxy paths reach the Panel app.
+
+        Server-proxy strips its prefix before forwarding, so the browser
+        URL /user/mona/tdms-explorer/ws arrives here as /ws.  Panel
+        expects /panel_app/ws, etc.
+        """
+        if path in ("", "/"):
+            return "/panel_app"
+        if not path.startswith("/panel_app") and not path.startswith("/static"):
+            return "/panel_app" + path
+        return path
 
     return {
         "command": [
@@ -46,6 +58,7 @@ def setup_tdms_explorer():
             "*",
         ],
         "timeout": 30,
+        "mappath": _mappath,
         "launcher_entry": launcher_entry,
         "new_browser_tab": True,
     }
