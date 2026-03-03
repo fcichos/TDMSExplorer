@@ -158,7 +158,7 @@ class TDMSExplorerApp(param.Parameterized):
         load_btn = pn.widgets.Button(name="Load File", button_type="primary")
         load_btn.on_click(lambda e: self._load_file())
 
-        metadata_pane = pn.bind(self._metadata_view)
+        metadata_pane = self._metadata_view
 
         return pn.Column(
             "## TDMS Explorer",
