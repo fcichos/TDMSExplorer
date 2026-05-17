@@ -11,12 +11,9 @@ import os
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
-# Get version from package
-version = "1.0.0"
-
 setup(
     name="tdms_explorer",
-    version=version,
+    version="1.1.0",
     author="TDMS Explorer Team",
     author_email="",
     description="A Python package for exploring and working with TDMS files",
@@ -51,6 +48,10 @@ setup(
         "scipy>=1.5.0",
     ],
     extras_require={
+        "video": [
+            "imageio>=2.9.0",
+            "imageio-ffmpeg>=0.4.0",
+        ],
         "dev": [
             "pytest>=6.0.0",
             "black>=20.0",
