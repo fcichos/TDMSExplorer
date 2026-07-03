@@ -14,7 +14,9 @@ A comprehensive command-line interface for working with TDMS files. This CLI pro
 
 ## Installation
 
-The CLI is included with the TDMS Explorer module. No additional installation is required.
+The CLI is included with the TDMS Explorer module. After installation, use the `tdms-explorer` command (or `python -m tdms_explorer`).
+
+The legacy `tdms_cli.py` script in the repo root is outdated; prefer `tdms-explorer`.
 
 ## Usage
 
@@ -95,26 +97,23 @@ python3 tdms_cli.py animate "file.tdms" animation.mp4 --no-display
 
 ### 5. Export Images
 
-Export images from TDMS files:
+Unified export for single files, frame ranges, batch patterns, dtype control, and optional MP4 output. The old `convert` subcommand is a deprecated alias.
 
 ```bash
-# Export all images
-python3 tdms_cli.py export "file.tdms" output_directory
+# Export all images (default: output_000.png, output_001.png, ...)
+tdms-explorer export "file.tdms" output_directory
 
-# Export specific range
-python3 tdms_cli.py export "file.tdms" output_directory --start 0 --end 100
+# Frame range (inclusive end), single frame, naming, dtype/format
+tdms-explorer export "file.tdms" output_directory --start 0 --end 100
+tdms-explorer export "file.tdms" output_directory --single 42
+tdms-explorer export "file.tdms" output_directory --prefix "frame_"
+tdms-explorer export "file.tdms" output_directory --base-name "experiment"
+tdms-explorer export "file.tdms" output_directory --dtype float32 --format tiff
 
-# Export single image
-python3 tdms_cli.py export "file.tdms" output_directory --single 42
-
-# Custom prefix and format
-python3 tdms_cli.py export "file.tdms" output_directory --prefix "frame_" --format jpg
-
-# Overwrite existing files
-python3 tdms_cli.py export "file.tdms" output_directory --overwrite
-
-# Different colormap
-python3 tdms_cli.py export "file.tdms" output_directory --cmap inferno
+# Batch, workers, video, overwrite
+tdms-explorer export "run_{:03d}.tdms" output_directory --workers 4 --to-mp4 --fps 30
+tdms-explorer export "file.tdms" output_directory --overwrite
+tdms-explorer export "file.tdms" output_directory --cmap inferno
 ```
 
 ### 6. Raw Data Access

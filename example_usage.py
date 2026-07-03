@@ -83,8 +83,8 @@ def main():
     print("="*50)
     
     output_dir = "example_images"
-    num_images = min(10, explorer.extract_images().shape[0])  # Write first 10 images
-    explorer.write_images(output_dir, start_frame=0, end_frame=num_images-1)
+    num_images = min(10, explorer.extract_images().shape[0])
+    explorer.write_images(output_dir, prefix='frame_', start_frame=0, end_frame=num_images - 1)
     print(f"Wrote {num_images} images to directory: {output_dir}")
     
     # Example 4: Display an image (interactive)

@@ -136,8 +136,13 @@ TDMSFileExplorer(filename: str)
 
 **Export**
 
-- `write_image(image_num: int, output_path: str, cmap: str = 'gray', overwrite: bool = False)`: Write single image
-- `write_images(output_dir: str, start_frame: int = 0, end_frame: Optional[int] = None, cmap: str = 'gray', prefix: str = 'output_', format: str = 'png')`: Write image series
+- `write_image(image_num, output_path, dtype=None, force=False, normed=True, cmap=None, overwrite=None) -> bool`
+- `write_images(output_dir, base_name=None, start_frame=0, end_frame=None, dtype=None, force=False, normed=True, prefix=None, format='png', cmap=None, overwrite=None) -> int`
+- `export_tdms_file(...) -> int`
+- `resolve_tdms_files(input_pattern, ...) -> List[Path]`
+- `process_tdms_files(input_pattern, output_dir, ...) -> int`
+
+Use `prefix` for `output_000.png` style names (inclusive end frame). Use `base_name` for `stem_001.png` style names (exclusive end frame). `float32` PNG output is stored as uint16; use TIFF for float32.
 
 **Raw Data Access**
 

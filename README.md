@@ -37,7 +37,7 @@ Install with video/batch conversion support:
 pip install -e ".[video]"
 ```
 
-The `[video]` extra installs `imageio` and `imageio-ffmpeg` for MP4 export via `write_video()` and `tdms-explorer convert --to-mp4`.
+The `[video]` extra installs `imageio` and `imageio-ffmpeg` for MP4 export via `write_video()` and `tdms-explorer export --to-mp4`.
 
 ## 🚀 Quick Start
 
@@ -128,9 +128,16 @@ TDMSFileExplorer(filename: str)
 
 **Export**
 
-- `write_image(image_num, output_path, dtype=None, force=False, normed=True) -> bool`: Write single image as PNG with dtype conversion
-- `write_images(output_dir, base_name=None, start_frame=0, end_frame=None, dtype=None, force=False, normed=True) -> int`: Batch-write frames as PNG; skips existing unless `force=True`
+- `write_image(image_num, output_path, dtype=None, force=False, normed=True, cmap=None, overwrite=None) -> bool`: Write single image with optional dtype conversion and colormap
+- `write_images(output_dir, base_name=None, start_frame=0, end_frame=None, dtype=None, force=False, normed=True, prefix=None, format='png', cmap=None, overwrite=None) -> int`: Batch-write frames; use `prefix` for `output_000.png` naming (inclusive `end_frame`) or `base_name` for `stem_001.png` naming (exclusive `end_frame`)
 - `write_video(output_path, start_frame=0, end_frame=None, fps=30.0, dtype=None, force=False, normed=True) -> bool`: Write MP4 (requires `[video]` extra)
+- `export_tdms_file(...) -> int`: Export one TDMS file with shared CLI options
+- `resolve_tdms_files(input_pattern, ...) -> List[Path]`: Resolve file, directory, glob, or `{:03d}` pattern inputs
+
+**Notes on dtypes and formats**
+
+- `float32` with `--format png` is saved as uint16 PNG (a note is printed); use `--format tiff` for true float32 output
+- Raster formats (PNG, JPG, …) accept uint8/uint16; TIFF accepts float32
 
 **Raw Data Access**
 
@@ -163,16 +170,14 @@ TDMSFileExplorer(filename: str)
 - Interactive visualization with matplotlib
 
 ### Export
-- Write individual images to files (PNG, JPG, etc.)
-- Export complete image series
-- Customizable filename prefixes and formats
+- Write individual images to files (PNG, TIFF, JPG, etc.)
+- Export complete image series with frame ranges or single frames
+- Batch export from file, directory, glob, or numbered patterns
+- Optional MP4 video, parallel workers, dtype control, and colormap export
+- Two naming styles: `--prefix` (`output_000.png`, 0-based) or `--base-name` (`stem_001.png`, 1-based)
 
-### Batch Conversion
-- Convert TDMS to PNG/MP4 with explicit image dimensions
-- Dtype conversion (uint8, uint16, float32) with normalization control
-- Skip existing files (resume capability)
-- Parallel processing via multiprocessing
-- Pattern matching for numbered file sequences
+### Batch Processing (Python API)
+- `process_tdms_files(input_pattern, output_dir, ...) -> int`: Multi-file batch processing with pattern matching and `multiprocessing.Pool`
 
 ### Raw Data Access
 - Access raw channel data for custom processing
@@ -208,7 +213,7 @@ tdms_explorer/
 ├── image_analysis.py    # Image filtering, edge detection, ROI, histograms
 └── cli/
     ├── __init__.py
-    └── cli.py           # CLI with subcommands (list, info, show, convert, ...)
+    └── cli.py           # CLI with subcommands (list, info, show, export, ...)
 ```
 
 ## 🔧 Command Line Usage
@@ -273,26 +278,52 @@ python -m tdms_explorer animate "file.tdms" animation.mp4 --cmap plasma
 python -m tdms_explorer animate "file.tdms" animation.mp4 --no-display
 ```
 
-#### 5. Export Images
+#### 5. Export Images (unified export + batch)
+
+The `export` command replaces the old separate `convert` workflow. `convert` remains as a deprecated alias.
 
 ```bash
-# Export all images
-python -m tdms_explorer export "file.tdms" output_directory
+# Export all images from one file (default names: output_000.png, output_001.png, ...)
+tdms-explorer export "file.tdms" output_directory
 
-# Export specific range
-python -m tdms_explorer export "file.tdms" output_directory --start 0 --end 100
+# Export a frame range (inclusive end frame)
+tdms-explorer export "file.tdms" output_directory --start 0 --end 100
 
-# Export single image
-python -m tdms_explorer export "file.tdms" output_directory --single 42
+# Export one frame
+tdms-explorer export "file.tdms" output_directory --single 42
 
-# Custom prefix and format
-python -m tdms_explorer export "file.tdms" output_directory --prefix "frame_" --format jpg
+# Prefix-based naming
+tdms-explorer export "file.tdms" output_directory --prefix "frame_"
 
-# Overwrite existing files
-python -m tdms_explorer export "file.tdms" output_directory --overwrite
+# Stem-based naming (1-based index)
+tdms-explorer export "file.tdms" output_directory --base-name "experiment"
 
-# Different colormap
-python -m tdms_explorer export "file.tdms" output_directory --cmap inferno
+# Dtype and format
+tdms-explorer export "file.tdms" output_directory --dtype uint8
+tdms-explorer export "file.tdms" output_directory --dtype float32 --format tiff
+
+# float32 to PNG is stored as uint16 with a printed note; use TIFF for float32
+
+# Colormap export, overwrite, normalization
+tdms-explorer export "file.tdms" output_directory --cmap inferno
+tdms-explorer export "file.tdms" output_directory --overwrite
+tdms-explorer export "file.tdms" output_directory --no-normed
+
+# Batch input: directory, glob, or numbered pattern
+tdms-explorer export "run_{:03d}.tdms" output_directory --start-index 1 --num-files 10
+tdms-explorer export input_directory/ output_directory --workers 4
+
+# MP4 video per input file
+tdms-explorer export "file.tdms" output_directory --to-mp4 --fps 30
+
+# Inspect structure without exporting
+tdms-explorer export "file.tdms" --list-structure
+```
+
+Deprecated alias (prints a warning):
+
+```bash
+tdms-explorer convert input.tdms -o output_directory
 ```
 
 #### 6. Raw Data Access
@@ -324,32 +355,7 @@ python -m tdms_explorer stats "file.tdms" --channels
 python -m tdms_explorer stats "file.tdms" --images --channels
 ```
 
-#### 8. Batch Convert (TDMS to PNG/MP4)
-
-```bash
-# Convert single file to PNG
-tdms-explorer convert input.tdms -o output_dir
-
-# Convert with explicit dimensions
-tdms-explorer convert input.tdms -o output --width 512 --height 512
-
-# Also create MP4 video
-tdms-explorer convert input.tdms -o output --to-mp4 --fps 30
-
-# Batch convert numbered files
-tdms-explorer convert "file_{:03d}.tdms" -o output --start-index 1 --num-files 10
-
-# List TDMS structure without converting
-tdms-explorer convert input.tdms --list-structure
-
-# Force overwrite, output as uint8, no normalization
-tdms-explorer convert input.tdms -o output --force --dtype uint8 --no-normed
-
-# Parallel processing with 4 workers
-tdms-explorer convert input.tdms -o output --workers 4
-```
-
-#### 9. Steering Data
+#### 8. Steering Data
 
 The `steering` command reads a channel that stores per-frame steering data as a flat array and reshapes it into a 2-D matrix of **frames × values-per-frame**.
 
@@ -443,8 +449,11 @@ from tdms_explorer import TDMSFileExplorer
 # Create explorer
 explorer = TDMSFileExplorer('experiment.tdms')
 
-# Export first 100 images
-explorer.write_images('experiment_images', start_frame=0, end_frame=100, dtype=np.uint8)
+# Export first 100 images with prefix naming (inclusive end frame)
+explorer.write_images('experiment_images', prefix='frame_', start_frame=0, end_frame=99, dtype=np.uint8)
+
+# Export with stem-based naming (exclusive end frame: 0..99)
+explorer.write_images('experiment_images', base_name='experiment', start_frame=0, end_frame=100, dtype=np.uint8)
 
 # Create animation of first 50 images
 from tdms_explorer import create_animation_from_tdms

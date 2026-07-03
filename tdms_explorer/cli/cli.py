@@ -1630,10 +1630,6 @@ Examples:
             plt.show()
 
 
-    def _command_convert(self):
-        self._command_export()
-
-
 def main():
     """Main entry point for CLI."""
     cli = TDMS_CLI()

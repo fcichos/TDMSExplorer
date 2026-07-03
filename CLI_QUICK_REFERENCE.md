@@ -4,97 +4,118 @@
 
 ```bash
 # List all TDMS files
-python3 tdms_cli.py list
+tdms-explorer list
 
 # Get file information
-python3 tdms_cli.py info "file.tdms"
+tdms-explorer info "file.tdms"
 
 # Show image
-python3 tdms_cli.py show "file.tdms" --image 0
+tdms-explorer show "file.tdms" --image 0
 
 # Export images
-python3 tdms_cli.py export "file.tdms" output_dir
+tdms-explorer export "file.tdms" output_dir
 
 # Create animation
-python3 tdms_cli.py animate "file.tdms" animation.mp4
+tdms-explorer animate "file.tdms" animation.mp4
 
 # Get statistics
-python3 tdms_cli.py stats "file.tdms" --images
+tdms-explorer stats "file.tdms" --images
 
 # Access raw data
-python3 tdms_cli.py raw "file.tdms" --group "Image" --channel "Image"
+tdms-explorer raw "file.tdms" --group "Image" --channel "Image"
 ```
 
 ## Common Options
 
 ### List Command
 ```bash
-python3 tdms_cli.py list [--dir DIRECTORY] [--details]
+tdms-explorer list [--dir DIRECTORY] [--details]
 ```
 
 ### Info Command
 ```bash
-python3 tdms_cli.py info FILE [--json]
+tdms-explorer info FILE [--json]
 ```
 
 ### Show Command
 ```bash
-python3 tdms_cli.py show FILE [--image NUM] [--cmap COLOMAP] [--no-show]
+tdms-explorer show FILE [--image NUM] [--cmap COLOMAP] [--no-show] [--save FILE]
 ```
 
 ### Animate Command
 ```bash
-python3 tdms_cli.py animate FILE OUTPUT [--fps FPS] [--start START] [--end END] [--cmap COLOMAP] [--no-display]
+tdms-explorer animate FILE OUTPUT [--fps FPS] [--start START] [--end END] [--cmap COLOMAP] [--no-display]
 ```
 
 ### Export Command
 ```bash
-python3 tdms_cli.py export FILE OUTPUT_DIR [--start START] [--end END] [--single NUM] [--prefix PREFIX] [--format FORMAT] [--cmap COLOMAP] [--overwrite]
+tdms-explorer export INPUT [OUTPUT]
+  [--start START] [--end END] [--single NUM]
+  [--prefix PREFIX] [--base-name NAME]
+  [--format FORMAT] [--cmap COLOMAP]
+  [--dtype {uint8,uint16,float32}] [--normed | --no-normed]
+  [--workers N] [--to-mp4] [--fps FPS]
+  [-f | --overwrite]
+  [--list-structure]
+  [--start-index N] [--num-files N]
 ```
+
+Notes:
+- Default single-file names: `output_000.png`, `output_001.png`, …
+- `--prefix frame_` → `frame_000.png` (0-based, inclusive `--end`)
+- `--base-name exp` → `exp_001.png` (1-based stem style)
+- `--dtype float32 --format png` saves uint16 PNG with a note; use `--format tiff` for float32
+- `convert` is a deprecated alias for `export` (use `-o` for output dir)
 
 ### Raw Command
 ```bash
-python3 tdms_cli.py raw FILE --group GROUP --channel CHANNEL [--info] [--save FILE]
+tdms-explorer raw FILE --group GROUP --channel CHANNEL [--info] [--save FILE]
 ```
 
 ### Stats Command
 ```bash
-python3 tdms_cli.py stats FILE [--images] [--channels]
+tdms-explorer stats FILE [--images] [--channels]
 ```
 
 ## Quick Examples
 
 ### 1. Explore a new TDMS file
 ```bash
-python3 tdms_cli.py info "new_experiment.tdms"
-python3 tdms_cli.py stats "new_experiment.tdms" --images --channels
+tdms-explorer info "new_experiment.tdms"
+tdms-explorer stats "new_experiment.tdms" --images --channels
 ```
 
 ### 2. Quick preview
 ```bash
-python3 tdms_cli.py show "experiment.tdms" --image 0
-python3 tdms_cli.py show "experiment.tdms" --image 50
-python3 tdms_cli.py show "experiment.tdms" --image 99
+tdms-explorer show "experiment.tdms" --image 0
+tdms-explorer show "experiment.tdms" --image 50
+tdms-explorer show "experiment.tdms" --image 99
 ```
 
 ### 3. Export for analysis
 ```bash
-python3 tdms_cli.py export "experiment.tdms" analysis_images --format tiff
+tdms-explorer export "experiment.tdms" analysis_images --format tiff --dtype float32
+tdms-explorer export "experiment.tdms" analysis_images --start 0 --end 10
 ```
 
-### 4. Create presentation animation
+### 4. Batch export + video
 ```bash
-python3 tdms_cli.py animate "experiment.tdms" presentation.mp4 --fps 15 --cmap viridis
+tdms-explorer export "run_{:03d}.tdms" output/ --start-index 1 --num-files 5 --to-mp4 --fps 30
 ```
 
-### 5. Extract raw data for custom processing
+### 5. Create presentation animation
 ```bash
-python3 tdms_cli.py raw "experiment.tdms" --group "Image" --channel "Image" --save experiment_data.npy
+tdms-explorer animate "experiment.tdms" presentation.mp4 --fps 15 --cmap viridis
+```
+
+### 6. Extract raw data for custom processing
+```bash
+tdms-explorer raw "experiment.tdms" --group "Image" --channel "Image" --save experiment_data.npy
 ```
 
 ## Common Colormaps
 
-- `gray` (default) - Grayscale
+- `gray` - Grayscale
 - `viridis` - Perceptually uniform
 - `plasma` - High contrast
 - `inferno` - High contrast
@@ -107,23 +128,20 @@ python3 tdms_cli.py raw "experiment.tdms" --group "Image" --channel "Image" --sa
 
 - Use quotes around filenames with spaces
 - Image numbers are 0-indexed
-- Frame ranges are inclusive
+- `--end` is inclusive for `--prefix` exports
 - Output directories are created automatically
 
 ## Help
 
 ```bash
-# General help
-python3 tdms_cli.py --help
-
-# Command-specific help
-python3 tdms_cli.py [command] --help
+tdms-explorer --help
+tdms-explorer export --help
 ```
 
 ## Tips
 
-1. **Start small**: Test with `--end 5` before processing entire files
-2. **Check sizes**: Use `list --details` to see file sizes first
-3. **Use `--no-show`**: For testing display commands
-4. **Quote paths**: Always quote file paths with spaces
-5. **Check ranges**: Use `info` command to see available frame ranges
+1. Start small: test with `--end 5` before processing entire files
+2. Check sizes: use `list --details` to see file sizes first
+3. Use `--save` on `show` when display is unavailable
+4. Quote paths with spaces
+5. Prefer `export` over deprecated `convert`
