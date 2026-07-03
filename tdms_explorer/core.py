@@ -269,9 +269,45 @@ class TDMSFileExplorer:
         plt.show()
         return ani
     
+    def _save_image_frame(self, frame: np.ndarray, output_path: Path,
+                          target_dtype: np.dtype, normed: bool = True,
+                          cmap: Optional[str] = None,
+                          image_format: Optional[str] = None) -> Optional[str]:
+        fmt = (image_format or Path(output_path).suffix.lstrip('.') or 'png').lower()
+        save_dtype, degraded = _storage_dtype_for_format(target_dtype, fmt)
+        converted = _convert_dtype(frame, save_dtype, normed)
+        out = Path(output_path)
+        if out.parent.as_posix() != '.':
+            out.parent.mkdir(parents=True, exist_ok=True)
+        if cmap is not None:
+            plt.imsave(str(out), converted, cmap=cmap)
+            return "float32 cannot be stored in PNG with cmap; saved as display image" if degraded else None
+        if fmt in _TIFF_FORMATS and np.issubdtype(target_dtype, np.floating):
+            Image.fromarray(converted.astype(np.float32), mode='F').save(out)
+            return None
+        if save_dtype == np.uint8:
+            img = Image.fromarray(converted, mode='L')
+        elif save_dtype == np.uint16:
+            img = Image.fromarray(converted, mode='I;16')
+        else:
+            img = Image.fromarray(converted)
+        save_kwargs = {}
+        if image_format:
+            pil_fmt = image_format.upper()
+            if pil_fmt == 'JPG':
+                pil_fmt = 'JPEG'
+            save_kwargs['format'] = pil_fmt
+        img.save(out, **save_kwargs)
+        if degraded:
+            return f"float32 cannot be stored in {fmt}; saved as uint16 (use --format tiff for float32)"
+        return None
+
     def write_image(self, image_num: int, output_path: str,
                     dtype: Optional[np.dtype] = None, force: bool = False,
-                    normed: bool = True) -> bool:
+                    normed: bool = True, cmap: Optional[str] = None,
+                    overwrite: Optional[bool] = None) -> bool:
+        if overwrite is not None:
+            force = overwrite
         images = self.extract_images()
         if images is None:
             return False
@@ -280,47 +316,71 @@ class TDMSFileExplorer:
         out = Path(output_path)
         if not force and out.exists():
             return False
-        if out.parent.as_posix() != '.':
-            out.parent.mkdir(parents=True, exist_ok=True)
         target = dtype if dtype is not None else images.dtype
-        converted = _convert_dtype(images[image_num], target, normed)
-        if target == np.uint8:
-            img = Image.fromarray(converted, mode='L')
-        elif target == np.uint16:
-            img = Image.fromarray(converted, mode='I;16')
-        else:
-            img = Image.fromarray(converted)
-        img.save(out)
+        self._save_image_frame(
+            images[image_num], out, target, normed=normed, cmap=cmap
+        )
         return True
 
     def write_images(self, output_dir: str, base_name: Optional[str] = None,
                      start_frame: int = 0, end_frame: Optional[int] = None,
                      dtype: Optional[np.dtype] = None, force: bool = False,
-                     normed: bool = True) -> int:
+                     normed: bool = True, prefix: Optional[str] = None,
+                     format: str = 'png', cmap: Optional[str] = None,
+                     overwrite: Optional[bool] = None) -> int:
+        if overwrite is not None:
+            force = overwrite
         images = self.extract_images()
         if images is None:
             return 0
-        if end_frame is None:
-            end_frame = images.shape[0]
-        subset = images[start_frame:end_frame]
-        name = base_name or Path(self.filename).stem.replace('_video', '')
         out = Path(output_dir)
         out.mkdir(parents=True, exist_ok=True)
         target = dtype if dtype is not None else images.dtype
+        image_format = format.lstrip('.')
         saved = 0
+        warnings: set = set()
+        if prefix is not None:
+            if end_frame is None:
+                end_inclusive = images.shape[0] - 1
+            else:
+                end_inclusive = end_frame
+            if start_frame < 0 or end_inclusive >= images.shape[0] or start_frame > end_inclusive:
+                raise ValueError(
+                    f"Invalid frame range. Available: 0 to {images.shape[0]-1}"
+                )
+            for frame_num in range(start_frame, end_inclusive + 1):
+                fp = out / f"{prefix}{frame_num:03d}.{image_format}"
+                if not force and fp.exists():
+                    continue
+                note = self._save_image_frame(
+                    images[frame_num], fp, target, normed=normed,
+                    cmap=cmap, image_format=image_format
+                )
+                if note:
+                    warnings.add(note)
+                saved += 1
+            for note in warnings:
+                print(f"Note: {note}")
+            return saved
+        if end_frame is None:
+            end_exclusive = images.shape[0]
+        else:
+            end_exclusive = end_frame
+        subset = images[start_frame:end_exclusive]
+        name = base_name or Path(self.filename).stem.replace('_video', '')
         for idx, frame in enumerate(subset):
-            fp = out / f"{name}_{start_frame + idx + 1:03d}.png"
+            fp = out / f"{name}_{start_frame + idx + 1:03d}.{image_format}"
             if not force and fp.exists():
                 continue
-            converted = _convert_dtype(frame, target, normed)
-            if target == np.uint8:
-                img = Image.fromarray(converted, mode='L')
-            elif target == np.uint16:
-                img = Image.fromarray(converted, mode='I;16')
-            else:
-                img = Image.fromarray(converted)
-            img.save(fp)
+            note = self._save_image_frame(
+                frame, fp, target, normed=normed,
+                cmap=cmap, image_format=image_format
+            )
+            if note:
+                warnings.add(note)
             saved += 1
+        for note in warnings:
+            print(f"Note: {note}")
         return saved
 
     def write_video(self, output_path: str, start_frame: int = 0,
@@ -689,6 +749,57 @@ def create_animation_from_tdms(filename: str, output_path: str,
     plt.close()
 
 
+_RASTER_FORMATS = frozenset({'png', 'jpg', 'jpeg', 'bmp', 'gif', 'webp'})
+_TIFF_FORMATS = frozenset({'tif', 'tiff'})
+
+
+def _storage_dtype_for_format(target_dtype: np.dtype, image_format: Optional[str]) -> Tuple[np.dtype, bool]:
+    fmt = (image_format or 'png').lower().lstrip('.')
+    if fmt in _TIFF_FORMATS and np.issubdtype(target_dtype, np.floating):
+        return np.float32, False
+    if fmt in _RASTER_FORMATS and np.issubdtype(target_dtype, np.floating):
+        return np.uint16, True
+    if fmt in _RASTER_FORMATS and target_dtype not in (np.uint8, np.uint16):
+        return np.uint16, False
+    return target_dtype, False
+
+
+def resolve_tdms_files(
+    input_pattern: str,
+    start_index: int = 1,
+    num_files: Optional[int] = None,
+) -> List[Path]:
+    input_path = Path(input_pattern)
+    if input_path.is_file():
+        tdms_files = [input_path]
+    elif input_path.is_dir():
+        tdms_files = sorted(input_path.glob("*.tdms"))
+        if num_files:
+            tdms_files = tdms_files[:num_files]
+    elif '{' in input_pattern:
+        tdms_files = []
+        file_idx = start_index
+        while True:
+            fp = Path(input_pattern.format(file_idx))
+            if not fp.exists():
+                break
+            tdms_files.append(fp)
+            file_idx += 1
+            if num_files and len(tdms_files) >= num_files:
+                break
+    else:
+        parent = input_path.parent if input_path.parent != Path('.') else Path('.')
+        if '*' in input_pattern or '?' in input_pattern:
+            tdms_files = sorted(parent.glob(input_path.name))
+        else:
+            tdms_files = sorted(parent.glob(f"{input_path.name}.tdms"))
+        if num_files:
+            tdms_files = tdms_files[:num_files]
+    if not tdms_files:
+        raise FileNotFoundError(f"No TDMS files found matching pattern: {input_pattern}")
+    return tdms_files
+
+
 def _convert_dtype(image: np.ndarray, target_dtype: np.dtype, normed: bool = True) -> np.ndarray:
     src = image.dtype
     if target_dtype == src:
@@ -723,16 +834,52 @@ def _convert_dtype(image: np.ndarray, target_dtype: np.dtype, normed: bool = Tru
     return image.astype(target_dtype)
 
 
-def _process_single_tdms(
-    args: Tuple
+def export_tdms_file(
+    tdms_file: Union[str, Path],
+    output_dir: Union[str, Path],
+    *,
+    prefix: Optional[str] = None,
+    base_name: Optional[str] = None,
+    start_frame: int = 0,
+    end_frame: Optional[int] = None,
+    format: str = 'png',
+    cmap: Optional[str] = None,
+    dtype: Optional[np.dtype] = None,
+    force: bool = False,
+    normed: bool = True,
+    to_video: bool = False,
+    fps: float = 30.0,
 ) -> int:
-    tdms_file, output_dir, base_name, dtype, to_video, fps, force, normed = args
     explorer = TDMSFileExplorer(str(tdms_file))
+    if not explorer.has_image_data():
+        return 0
     name = base_name or Path(tdms_file).stem.replace('_video', '')
-    saved = explorer.write_images(str(output_dir), base_name=name, dtype=dtype, force=force, normed=normed)
+    write_end = end_frame
+    if prefix is None and end_frame is not None:
+        write_end = end_frame + 1
+    if prefix is not None:
+        saved = explorer.write_images(
+            str(output_dir), prefix=prefix, start_frame=start_frame,
+            end_frame=end_frame, format=format, cmap=cmap, dtype=dtype,
+            force=force, normed=normed,
+        )
+    else:
+        saved = explorer.write_images(
+            str(output_dir), base_name=name, start_frame=start_frame,
+            end_frame=write_end, format=format, cmap=cmap, dtype=dtype,
+            force=force, normed=normed,
+        )
     if to_video:
-        explorer.write_video(str(Path(output_dir) / f"{name}.mp4"), fps=fps, dtype=dtype, force=force, normed=normed)
+        explorer.write_video(
+            str(Path(output_dir) / f"{name}.mp4"), fps=fps,
+            dtype=dtype, force=force, normed=normed,
+        )
     return saved
+
+
+def _process_single_tdms(args: Tuple) -> int:
+    tdms_file, output_dir, export_kwargs = args
+    return export_tdms_file(tdms_file, output_dir, **export_kwargs)
 
 
 def process_tdms_files(
@@ -746,43 +893,31 @@ def process_tdms_files(
     to_video: bool = False,
     fps: float = 30.0,
     force: bool = False,
-    normed: bool = True
+    normed: bool = True,
+    prefix: Optional[str] = None,
+    format: str = 'png',
+    cmap: Optional[str] = None,
+    start_frame: int = 0,
+    end_frame: Optional[int] = None,
 ) -> int:
-    input_path = Path(input_pattern)
-    if input_path.is_file():
-        tdms_files = [input_path]
-    elif input_path.is_dir():
-        tdms_files = sorted(input_path.glob("*.tdms"))
-        if num_files:
-            tdms_files = tdms_files[:num_files]
-    elif '{' in input_pattern:
-        tdms_files = []
-        file_idx = start_index
-        while True:
-            fp = Path(input_pattern.format(file_idx))
-            if not fp.exists():
-                break
-            tdms_files.append(fp)
-            file_idx += 1
-            if num_files and len(tdms_files) >= num_files:
-                break
-    else:
-        parent = input_path.parent if input_path.parent != Path('.') else Path('.')
-        if '*' in input_pattern or '?' in input_pattern:
-            tdms_files = sorted(parent.glob(input_path.name))
-        else:
-            tdms_files = sorted(parent.glob(f"{input_path.name}.tdms"))
-        if num_files:
-            tdms_files = tdms_files[:num_files]
-    if not tdms_files:
-        raise FileNotFoundError(f"No TDMS files found matching pattern: {input_pattern}")
+    tdms_files = resolve_tdms_files(input_pattern, start_index, num_files)
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
+    export_kwargs = {
+        'prefix': prefix,
+        'base_name': base_name,
+        'start_frame': start_frame,
+        'end_frame': end_frame,
+        'format': format,
+        'cmap': cmap,
+        'dtype': dtype,
+        'force': force,
+        'normed': normed,
+        'to_video': to_video,
+        'fps': fps,
+    }
     workers = num_workers if num_workers is not None else cpu_count()
-    tasks = [
-        (f, out, base_name, dtype, to_video, fps, force, normed)
-        for f in tdms_files
-    ]
+    tasks = [(f, out, export_kwargs) for f in tdms_files]
     if workers <= 1 or len(tasks) == 1:
         return sum(_process_single_tdms(t) for t in tasks)
     with Pool(processes=workers) as pool:

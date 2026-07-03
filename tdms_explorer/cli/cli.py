@@ -13,7 +13,7 @@ from typing import List, Optional
 try:
     from tdms_explorer.core import (
         TDMSFileExplorer, list_tdms_files, create_animation_from_tdms,
-        process_tdms_files, HAS_IMAGEIO,
+        process_tdms_files, resolve_tdms_files, export_tdms_file, HAS_IMAGEIO,
     )
     import numpy as np
     import matplotlib.pyplot as plt
@@ -140,19 +140,34 @@ Examples:
         animate_parser.add_argument('--steering-channel', default='Steering Data', dest='steering_channel',
                                     help='Steering channel name (default: "Steering Data")')
         
-        # Export command
-        export_parser = subparsers.add_parser('export', help='Export images from TDMS file')
-        export_parser.add_argument('file', help='TDMS file to export')
-        export_parser.add_argument('output_dir', help='Output directory for images')
-        export_parser.add_argument('--start', type=int, default=0, help='Start frame (default: 0)')
-        export_parser.add_argument('--end', type=int, help='End frame (default: last frame)')
-        export_parser.add_argument('--prefix', default='output_', help='Filename prefix (default: output_)')
-        export_parser.add_argument('--format', default='png', help='Image format (default: png)')
-        export_parser.add_argument('--cmap', default='gray', help='Colormap to use (default: gray)')
-        export_parser.add_argument('--single', type=int, help='Export only single image number')
-        export_parser.add_argument('--overwrite', action='store_true', help='Overwrite existing files')
-        
-        # Raw command
+        # Export command (unified export + convert)
+        export_parser = subparsers.add_parser(
+            'export',
+            help='Export TDMS image stacks to files and/or video',
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+            epilog=textwrap.dedent('''\
+Examples:
+  tdms-explorer export file.tdms output_dir/
+  tdms-explorer export file.tdms output_dir/ --prefix frame_ --start 0 --end 99
+  tdms-explorer export file.tdms output/ --dtype float32 --format tiff
+  tdms-explorer export "run_{:03d}.tdms" output/ --workers 4 --to-mp4 --fps 30
+  tdms-explorer export file.tdms --list-structure
+            ''')
+        )
+        export_parser.add_argument('input', help='TDMS file, directory, or pattern ({:03d})')
+        export_parser.add_argument('output', nargs='?', default=None, help='Output directory')
+        self._add_export_options(export_parser)
+
+        convert_parser = subparsers.add_parser(
+            'convert',
+            help='Deprecated alias for export',
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+        )
+        convert_parser.add_argument('input', help='TDMS file, directory, or pattern ({:03d})')
+        convert_parser.add_argument('-o', '--output', dest='output', default=None, help='Output directory')
+        self._add_export_options(convert_parser)
+        convert_parser.set_defaults(_deprecated_alias=True)
+
         raw_parser = subparsers.add_parser('raw', help='Access raw channel data')
         raw_parser.add_argument('file', help='TDMS file to read')
         raw_parser.add_argument('--group', '-g', required=True, help='Group name')
@@ -283,34 +298,27 @@ Examples:
         profile_parser.add_argument('--position', '-p', type=int, help='Position for line profile')
         profile_parser.add_argument('--save', help='Save profile data to JSON file')
 
-        convert_parser = subparsers.add_parser(
-            'convert',
-            help='Batch-convert TDMS files to PNG images and/or MP4 video',
-            formatter_class=argparse.RawDescriptionHelpFormatter,
-            epilog=textwrap.dedent('''\
-Examples:
-  tdms-explorer convert input.tdms -o output_dir
-  tdms-explorer convert input.tdms -o output --to-mp4 --fps 30
-  tdms-explorer convert "file_{:03d}.tdms" -o output --start-index 1 --num-files 10
-  tdms-explorer convert input.tdms --list-structure
-  tdms-explorer convert input.tdms -o output --no-normed --dtype uint8 --workers 4
-            ''')
-        )
-        convert_parser.add_argument('input', help='Input TDMS file, directory, or pattern ({:03d})')
-        convert_parser.add_argument('-o', '--output', help='Output directory (required unless --list-structure)')
-        convert_parser.add_argument('--list-structure', action='store_true', help='List TDMS structure and exit')
-        convert_parser.add_argument('--base-name', type=str, default=None, help='Base name for output files')
-        convert_parser.add_argument('--dtype', choices=['uint8', 'uint16', 'float32'], default=None, help='Output data type')
-        convert_parser.add_argument('--workers', type=int, default=None, help=f'Parallel workers (default: {cpu_count()})')
-        convert_parser.add_argument('--to-mp4', action='store_true', help='Also create MP4 video')
-        convert_parser.add_argument('--fps', type=float, default=30.0, help='Video FPS (default: 30)')
-        convert_parser.add_argument('-f', '--force', action='store_true', help='Overwrite existing files')
-        convert_parser.add_argument('--normed', action='store_true', default=True, help='Normalize to full dynamic range (default)')
-        convert_parser.add_argument('--no-normed', dest='normed', action='store_false', help='Preserve raw values')
-        convert_parser.add_argument('--start-index', type=int, default=1, help='Start index for pattern matching')
-        convert_parser.add_argument('--num-files', type=int, default=None, help='Max number of files to process')
-
         return parser
+
+    def _add_export_options(self, parser: argparse.ArgumentParser) -> None:
+        parser.add_argument('--start', type=int, default=0, help='Start frame (default: 0)')
+        parser.add_argument('--end', type=int, help='End frame, inclusive (default: last frame)')
+        parser.add_argument('--prefix', default=None, help='Filename prefix for output_000.png style names')
+        parser.add_argument('--base-name', type=str, default=None, help='Base name for stem_001.png style names')
+        parser.add_argument('--format', default='png', help='Image format: png, tiff, jpg, ... (default: png)')
+        parser.add_argument('--cmap', default=None, help='Matplotlib colormap (default: raw/PIL save)')
+        parser.add_argument('--single', type=int, help='Export only one frame number')
+        parser.add_argument('--dtype', choices=['uint8', 'uint16', 'float32'], default=None, help='Output pixel dtype')
+        parser.add_argument('--workers', type=int, default=None, help=f'Parallel workers (default: {cpu_count()})')
+        parser.add_argument('--to-mp4', action='store_true', help='Also create MP4 video per TDMS file')
+        parser.add_argument('--fps', type=float, default=30.0, help='Video FPS (default: 30)')
+        parser.add_argument('-f', '--force', action='store_true', help='Overwrite existing files')
+        parser.add_argument('--overwrite', action='store_true', help='Alias for --force')
+        parser.add_argument('--normed', action='store_true', default=True, help='Normalize to full dynamic range (default)')
+        parser.add_argument('--no-normed', dest='normed', action='store_false', help='Preserve raw values')
+        parser.add_argument('--list-structure', action='store_true', help='List TDMS structure and exit')
+        parser.add_argument('--start-index', type=int, default=1, help='Start index for {:03d} input patterns')
+        parser.add_argument('--num-files', type=int, default=None, help='Max number of input TDMS files')
     
     def parse_args(self, args=None):
         """Parse command line arguments."""
@@ -657,72 +665,125 @@ Examples:
         except Exception as e:
             print(f"Error creating animation: {e}")
     
+    def _export_dtype(self) -> Optional[np.dtype]:
+        dtype_map = {'uint8': np.uint8, 'uint16': np.uint16, 'float32': np.float32}
+        return dtype_map.get(self.args.dtype) if self.args.dtype else None
+
+    def _is_batch_input(self, input_arg: str) -> bool:
+        path = Path(input_arg)
+        return path.is_dir() or '{' in input_arg or '*' in input_arg or '?' in input_arg
+
+    def _resolve_export_naming(self, num_files: int) -> tuple:
+        args = self.args
+        if args.base_name is not None:
+            return None, args.base_name
+        if args.prefix is not None:
+            return args.prefix, None
+        if getattr(args, '_deprecated_alias', False):
+            return None, None
+        if num_files > 1 or self._is_batch_input(args.input):
+            return None, None
+        return 'output_', None
+
     def _command_export(self):
-        """Export command."""
-        filename = self.args.file
-        output_dir = self.args.output_dir
-        start = self.args.start
-        end = self.args.end
-        prefix = self.args.prefix
-        format = self.args.format
-        cmap = self.args.cmap
-        single = self.args.single
-        overwrite = self.args.overwrite
-        
+        args = self.args
+        if getattr(args, '_deprecated_alias', False):
+            print("Warning: 'convert' is deprecated; use 'export' instead.", file=sys.stderr)
+
+        if args.list_structure:
+            input_path = Path(args.input)
+            if '{' in args.input:
+                input_path = Path(args.input.format(args.start_index))
+            if not input_path.exists():
+                print(f"Error: File not found: {input_path}", file=sys.stderr)
+                sys.exit(1)
+            TDMSFileExplorer(str(input_path)).print_contents()
+            return
+
+        if not args.output:
+            print("Error: output directory is required unless using --list-structure", file=sys.stderr)
+            sys.exit(1)
+
+        if args.to_mp4 and not HAS_IMAGEIO:
+            print("Error: imageio required for video. Install with: pip install tdms_explorer[video]", file=sys.stderr)
+            sys.exit(1)
+
+        dtype = self._export_dtype()
+        force = args.force or args.overwrite
+        format_ext = args.format.lstrip('.')
+
         try:
-            explorer = TDMSFileExplorer(filename)
-            
-            if not explorer.has_image_data():
-                print("No image data found in file.")
-                return
-            
+            tdms_files = resolve_tdms_files(args.input, args.start_index, args.num_files)
+        except FileNotFoundError as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            sys.exit(1)
+
+        prefix, base_name = self._resolve_export_naming(len(tdms_files))
+        out = Path(args.output)
+        out.mkdir(parents=True, exist_ok=True)
+
+        if args.single is not None:
+            if len(tdms_files) != 1:
+                print("Error: --single requires exactly one input TDMS file.", file=sys.stderr)
+                sys.exit(1)
+            single_prefix = prefix if prefix is not None else 'output_'
+            output_path = out / f"{single_prefix}{args.single:03d}.{format_ext}"
+            print(f"Exporting single image {args.single} to {output_path}")
+            export_tdms_file(
+                tdms_files[0], out,
+                prefix=single_prefix, start_frame=args.single, end_frame=args.single,
+                format=format_ext, cmap=args.cmap, dtype=dtype, force=force, normed=args.normed,
+            )
+            print(f"✓ Exported image {args.single}")
+            return
+
+        start_frame = args.start
+        end_frame = args.end
+        if len(tdms_files) > 1 or self._is_batch_input(args.input):
+            start_frame = 0
+            end_frame = None
+
+        if len(tdms_files) == 1 and end_frame is None and prefix is not None:
+            explorer = TDMSFileExplorer(str(tdms_files[0]))
             images = explorer.extract_images()
-            if images is None:
-                print("Could not extract images.")
-                return
-            
-            if single is not None:
-                # Export single image
-                if single >= images.shape[0]:
-                    print(f"Image number {single} is out of range. Max: {images.shape[0]-1}")
-                    return
-                
-                output_path = os.path.join(output_dir, f"{prefix}{single:03d}.{format}")
-                print(f"Exporting single image {single} to {output_path}")
-                explorer.write_image(single, output_path, cmap=cmap, overwrite=overwrite)
-                print(f"✓ Exported image {single}")
-                
-            else:
-                # Export image series
-                if end is None:
-                    end = images.shape[0] - 1
-                
-                if start < 0 or end >= images.shape[0] or start > end:
-                    print(f"Invalid frame range. Available: 0 to {images.shape[0]-1}")
-                    return
-                
-                total_frames = end - start + 1
-                print(f"Exporting {total_frames} images from {filename}")
-                print(f"Frames: {start} to {end}")
-                print(f"Output directory: {output_dir}")
-                print(f"Format: {format}")
-                print(f"Prefix: {prefix}")
-                
-                explorer.write_images(
-                    output_dir, 
-                    start_frame=start, 
-                    end_frame=end, 
-                    prefix=prefix, 
-                    format=format, 
-                    cmap=cmap
-                )
-                
-                # Show summary
-                exported_files = [f for f in os.listdir(output_dir) if f.startswith(prefix) and f.endswith(f'.{format}')]
-                print(f"\n✓ Exported {len(exported_files)} images to {output_dir}")
-                
-        except Exception as e:
-            print(f"Error exporting images: {e}")
+            if images is not None:
+                end_frame = images.shape[0] - 1
+
+        if end_frame is not None and prefix is not None:
+            total_frames = end_frame - start_frame + 1
+            print(f"Exporting {total_frames} images from {tdms_files[0]}")
+            print(f"Frames: {start_frame} to {end_frame}")
+            print(f"Output directory: {out}")
+            print(f"Format: {format_ext}")
+            print(f"Prefix: {prefix}")
+
+        total_saved = process_tdms_files(
+            input_pattern=args.input,
+            output_dir=out,
+            start_index=args.start_index,
+            num_files=args.num_files,
+            prefix=prefix,
+            base_name=base_name,
+            dtype=dtype,
+            num_workers=args.workers,
+            to_video=args.to_mp4,
+            fps=args.fps,
+            force=force,
+            normed=args.normed,
+            format=format_ext,
+            cmap=args.cmap,
+            start_frame=start_frame,
+            end_frame=end_frame,
+        )
+
+        if args.to_mp4:
+            num_videos = len(list(out.glob('*.mp4')))
+            print(f"Exported {total_saved} images and {num_videos} video(s) to {out}")
+        else:
+            print(f"Exported {total_saved} images to {out}")
+
+    def _command_convert(self):
+        self._command_export()
     
     def _command_raw(self):
         """Raw data command."""
@@ -1570,48 +1631,7 @@ Examples:
 
 
     def _command_convert(self):
-        args = self.args
-        dtype_map = {'uint8': np.uint8, 'uint16': np.uint16, 'float32': np.float32}
-        dtype = dtype_map.get(args.dtype) if args.dtype else None
-
-        if args.list_structure:
-            input_path = Path(args.input)
-            if '{' in args.input:
-                input_path = Path(args.input.format(args.start_index))
-            if not input_path.exists():
-                print(f"Error: File not found: {input_path}", file=sys.stderr)
-                sys.exit(1)
-            TDMSFileExplorer(str(input_path)).print_contents()
-            return
-
-        if not args.output:
-            print("Error: --output is required unless using --list-structure", file=sys.stderr)
-            sys.exit(1)
-
-        if args.to_mp4 and not HAS_IMAGEIO:
-            print("Error: imageio required for video. Install with: pip install tdms_explorer[video]", file=sys.stderr)
-            sys.exit(1)
-
-        total_saved = process_tdms_files(
-            input_pattern=args.input,
-            output_dir=Path(args.output),
-            start_index=args.start_index,
-            num_files=args.num_files,
-            base_name=args.base_name,
-            dtype=dtype,
-            num_workers=args.workers,
-            to_video=args.to_mp4,
-            fps=args.fps,
-            force=args.force,
-            normed=args.normed,
-        )
-
-        out = Path(args.output)
-        if args.to_mp4:
-            num_videos = len(list(out.glob('*.mp4')))
-            print(f"Converted {total_saved} images and {num_videos} video(s) to {out}")
-        else:
-            print(f"Converted {total_saved} images to {out}")
+        self._command_export()
 
 
 def main():
