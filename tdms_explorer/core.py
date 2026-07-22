@@ -821,6 +821,11 @@ def _convert_dtype(image: np.ndarray, target_dtype: np.dtype, normed: bool = Tru
             if hi > lo:
                 return ((image - lo) / (hi - lo) * 255.0).astype(np.uint8)
             return np.zeros_like(image, dtype=np.uint8)
+        if normed:
+            lo, hi = image.min(), image.max()
+            if hi > lo:
+                return ((image.astype(np.float32) - lo) / (hi - lo) * 255.0).astype(np.uint8)
+            return np.zeros_like(image, dtype=np.uint8)
         return np.clip(image, 0, 255).astype(np.uint8)
     if target_dtype == np.uint16:
         if src == np.uint8:
@@ -829,6 +834,11 @@ def _convert_dtype(image: np.ndarray, target_dtype: np.dtype, normed: bool = Tru
             lo, hi = image.min(), image.max()
             if hi > lo:
                 return ((image - lo) / (hi - lo) * 65535.0).astype(np.uint16)
+            return np.zeros_like(image, dtype=np.uint16)
+        if normed:
+            lo, hi = image.min(), image.max()
+            if hi > lo:
+                return ((image.astype(np.float32) - lo) / (hi - lo) * 65535.0).astype(np.uint16)
             return np.zeros_like(image, dtype=np.uint16)
         return np.clip(image, 0, 65535).astype(np.uint16)
     return image.astype(target_dtype)
